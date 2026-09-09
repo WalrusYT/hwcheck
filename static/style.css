@@ -1,0 +1,208 @@
+:root {
+  --bg: #f5f6f8;
+  --panel: #ffffff;
+  --text: #1f2328;
+  --muted: #6b7280;
+  --border: #e3e5e9;
+  --accent: #2563eb;
+  --accent-text: #ffffff;
+  --good: #15803d;
+  --good-bg: #ecfdf3;
+  --bad: #b42318;
+  --bad-bg: #fef3f2;
+  --warn: #92400e;
+  --warn-bg: #fffaeb;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+.page {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 24px 16px 60px;
+}
+
+.flash {
+  background: #eef2ff;
+  border: 1px solid #c7d2fe;
+  color: #3730a3;
+  padding: 10px 14px;
+  border-radius: 10px;
+  margin-bottom: 16px;
+}
+
+.card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 24px;
+  margin-bottom: 20px;
+}
+
+.card.narrow { max-width: 440px; margin-left: auto; margin-right: auto; }
+.card.wide { max-width: 960px; }
+.card.center { text-align: center; }
+
+h1 { margin-top: 0; font-size: 1.5rem; }
+h2 { font-size: 1.1rem; margin-top: 28px; }
+
+.muted { color: var(--muted); font-size: 0.9rem; }
+.hint { color: var(--muted); font-size: 0.82rem; margin-top: -8px; }
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 16px;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr auto;
+  align-items: end;
+  gap: 12px;
+}
+
+.form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.form input[type="text"],
+.form input[type="password"],
+.form textarea,
+.form input[type="file"] {
+  font: inherit;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+}
+
+.form textarea { resize: vertical; }
+
+.checkbox {
+  flex-direction: row !important;
+  align-items: center;
+  gap: 8px !important;
+}
+
+button, .button {
+  padding: 10px 18px;
+  border: none;
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--accent-text);
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-block;
+  text-align: center;
+  width: fit-content;
+}
+
+.errors {
+  background: var(--bad-bg);
+  color: var(--bad);
+  border: 1px solid var(--bad);
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 0.9rem;
+}
+
+.flags {
+  background: var(--warn-bg);
+  border: 1px solid #fde68a;
+  color: var(--warn);
+  padding: 10px 14px;
+  border-radius: 10px;
+  margin: 12px 0;
+  font-size: 0.9rem;
+}
+
+.flags ul { margin: 6px 0 0; padding-left: 20px; }
+
+.admin-nav {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  padding: 12px 0 20px;
+  font-size: 0.92rem;
+}
+
+.admin-nav a { color: var(--text); text-decoration: none; }
+.admin-nav a:hover { color: var(--accent); }
+.admin-nav .right { margin-left: auto; }
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  min-width: 480px;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+
+.table th, .table td {
+  text-align: left;
+  padding: 10px 8px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+
+.table th { color: var(--muted); font-weight: 600; }
+.row-new { background: #fafaff; }
+
+.badge {
+  display: inline-block;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  background: #f0f0f3;
+  color: var(--muted);
+}
+
+.badge-new { background: #dbeafe; color: #1e40af; }
+.badge-reviewed { background: #dcfce7; color: var(--good); }
+.badge-done { background: #dcfce7; color: var(--good); }
+.badge-error { background: var(--bad-bg); color: var(--bad); }
+
+.badge-correct { background: var(--good-bg); color: var(--good); }
+.badge-incorrect { background: var(--bad-bg); color: var(--bad); }
+.badge-partially_correct { background: var(--warn-bg); color: var(--warn); }
+.badge-unclear { background: #f0f0f3; color: var(--muted); }
+
+.badge-conf-high { background: var(--good-bg); color: var(--good); }
+.badge-conf-medium { background: var(--warn-bg); color: var(--warn); }
+.badge-conf-low { background: var(--bad-bg); color: var(--bad); }
+
+.files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 10px 0 20px;
+}
+
+.files img {
+  height: 140px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+@media (max-width: 640px) {
+  .form-row { grid-template-columns: 1fr; }
+}

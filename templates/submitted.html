@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}Submitted - HWCheck{% endblock %}
+{% block content %}
+<div class="card narrow center">
+  <h1>Thanks, {{ student_name }}! ✅</h1>
+  <p class="muted">Your homework has been submitted. Your tutor will review it and get back to you.</p>
+  <a class="button" href="{{ url_for('submit_form') }}">Submit another</a>
+</div>
+{% endblock %}

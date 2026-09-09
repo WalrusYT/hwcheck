@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Admin Login - HWCheck{% endblock %}
+{% block content %}
+<div class="card narrow">
+  <h1>Tutor login</h1>
+  {% if error %}<div class="errors">{{ error }}</div>{% endif %}
+  <form method="post" class="form">
+    <label>
+      Password
+      <input type="password" name="password" required autofocus>
+    </label>
+    <button type="submit">Log in</button>
+  </form>
+</div>
+{% endblock %}

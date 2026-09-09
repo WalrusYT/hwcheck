@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Dashboard - HWCheck{% endblock %}
+{% block content %}
+<nav class="admin-nav">
+  <strong>HWCheck admin</strong>
+  <a href="{{ url_for('admin_dashboard') }}">Submissions</a>
+  <a href="{{ url_for('admin_homeworks') }}">Homework codes</a>
+  <a href="{{ url_for('admin_logout') }}" class="right">Log out</a>
+</nav>
+
+<div class="card wide">
+  <h1>Submissions</h1>
+  {% if not submissions %}
+    <p class="muted">No submissions yet.</p>
+  {% else %}
+  <div class="table-wrap">
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Status</th>
+        <th>Student</th>
+        <th>Homework</th>
+        <th>Submitted</th>
+        <th>AI result</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for s in submissions %}
+      <tr class="{{ 'row-new' if s['tutor_status'] == 'new' else '' }}">
+        <td>
+          {% if s['tutor_status'] == 'new' %}<span class="badge badge-new">New</span>
+          {% else %}<span class="badge badge-reviewed">Reviewed</span>{% endif %}
+        </td>
+        <td>{{ s['student_name'] }}</td>
+        <td>{{ s['homework_code'] }}</td>
+        <td>{{ s['submitted_at'] }}</td>
+        <td>
+          {% if s['ai_status'] == 'done' %}<span class="badge badge-done">Ready</span>
+          {% elif s['ai_status'] == 'error' %}<span class="badge badge-error">Error</span>
+          {% else %}<span class="badge">Pending</span>{% endif %}
+        </td>
+        <td><a href="{{ url_for('admin_submission_detail', submission_id=s['id']) }}">View →</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
