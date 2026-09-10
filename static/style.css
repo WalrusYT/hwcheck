@@ -192,6 +192,15 @@ button, .button {
   background: var(--bad-bg);
 }
 
+.button-secondary.button-accent {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.button-secondary.button-accent:hover {
+  background: #dbeafe;
+}
+
 .logo {
   display: inline-flex;
   align-items: center;

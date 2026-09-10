@@ -51,7 +51,7 @@
         <td>{{ s['name'] }}</td>
         <td><code>{{ s['username'] }}</code></td>
         <td>{{ s['created_at'] }}</td>
-        <td><a href="{{ url_for('admin.student_detail', student_id=s['id']) }}">View →</a></td>
+        <td><a href="{{ url_for('admin.student_detail', student_id=s['id']) }}" class="button button-secondary button-accent">View →</a></td>
         <td>
           <form method="post" action="{{ url_for('admin.delete_student', student_id=s['id']) }}"
                 onsubmit="return confirm('Delete this student and ALL their homework, submissions, and chat history? This cannot be undone.');">
