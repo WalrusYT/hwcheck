@@ -21,7 +21,9 @@ from flask import (
 from werkzeug.utils import secure_filename
 
 import db
+import notifications
 import performance
+import translations
 import performance_pdf
 from auth import admin_required, hash_password, password_error
 from config import ALLOWED_EXT, ASSIGNMENT_FILES_DIR, MAX_FILES, SUBMISSION_FILES_DIR
@@ -159,7 +161,7 @@ def student_reset_password(student_id):
 @admin_required
 def create_assignment(student_id):
     conn = db.get_db()
-    student = conn.execute("SELECT id FROM students WHERE id = ?", (student_id,)).fetchone()
+    student = conn.execute("SELECT id, language FROM students WHERE id = ?", (student_id,)).fetchone()
     if not student:
         conn.close()
         abort(404)
@@ -204,6 +206,12 @@ def create_assignment(student_id):
         conn.commit()
 
     conn.close()
+    notifications.notify_student(
+        student_id,
+        "new_assignment",
+        translations.render("notif.new_assignment", student["language"], title=title),
+        link=url_for("student.homework_detail", assignment_id=assignment_id),
+    )
     flash(f"Created assignment '{title}'.")
     return redirect(url_for("admin.student_detail", student_id=student_id))
 
@@ -320,6 +328,18 @@ def submission_detail(submission_id):
                 conn.commit()
                 _refresh_narrative(conn, submission["student_id"])
                 conn.commit()
+                assignment_title = conn.execute(
+                    "SELECT title FROM homework_assignments WHERE id = ?", (submission["assignment_id"],)
+                ).fetchone()["title"]
+                student_lang = conn.execute(
+                    "SELECT language FROM students WHERE id = ?", (submission["student_id"],)
+                ).fetchone()["language"]
+                notifications.notify_student(
+                    submission["student_id"],
+                    "feedback_published",
+                    translations.render("notif.graded", student_lang, title=assignment_title, grade=grade),
+                    link=url_for("student.homework_detail", assignment_id=submission["assignment_id"]),
+                )
                 flash("Feedback published to student.")
             else:
                 conn.execute(
@@ -349,6 +369,29 @@ def submission_detail(submission_id):
         task_files=task_files,
         ai_result=ai_result,
     )
+
+
+# ---- Notifications ---------------------------------------------------------
+
+@admin_bp.route("/notifications/<int:notification_id>/open")
+@admin_required
+def notification_open(notification_id):
+    conn = db.get_db()
+    notif = conn.execute(
+        "SELECT * FROM notifications WHERE id = ? AND recipient_type = 'admin'", (notification_id,)
+    ).fetchone()
+    if notif:
+        conn.execute("UPDATE notifications SET is_read = 1 WHERE id = ?", (notification_id,))
+        conn.commit()
+    conn.close()
+    return redirect(notif["link"] if notif and notif["link"] else url_for("admin.dashboard"))
+
+
+@admin_bp.route("/notifications/mark-all-read", methods=["POST"])
+@admin_required
+def notifications_mark_all_read():
+    notifications.mark_all_read_admin()
+    return redirect(request.referrer or url_for("admin.dashboard"))
 
 
 # ---- File serving ---------------------------------------------------------

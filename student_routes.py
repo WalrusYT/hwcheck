@@ -18,6 +18,7 @@ from werkzeug.utils import secure_filename
 
 import db
 import homework_chat
+import notifications
 import performance
 from auth import check_password, hash_password, password_error, student_required
 from config import ALLOWED_EXT, ASSIGNMENT_FILES_DIR, MAX_FILES, SUBMISSION_FILES_DIR
@@ -35,11 +36,22 @@ def login():
         password = request.form.get("password", "")
         conn = db.get_db()
         student = conn.execute("SELECT * FROM students WHERE username = ?", (username,)).fetchone()
-        conn.close()
         if student and check_password(student["password_hash"], password):
             session["student_id"] = student["id"]
             session["lang"] = student["language"]
+            if not student["first_login_at"]:
+                conn.execute(
+                    "UPDATE students SET first_login_at = datetime('now') WHERE id = ?", (student["id"],)
+                )
+                conn.commit()
+                notifications.notify_admin(
+                    "first_login",
+                    f"{student['name']} logged in for the first time",
+                    link=url_for("admin.student_detail", student_id=student["id"]),
+                )
+            conn.close()
             return redirect(request.args.get("next") or url_for("student.dashboard"))
+        conn.close()
         error = t("login.error")
     return render_template("student/login.html", error=error)
 
@@ -145,6 +157,12 @@ def homework_detail(assignment_id):
             student = conn.execute("SELECT * FROM students WHERE id = ?", (session["student_id"],)).fetchone()
             task_file_names = json.loads(assignment["task_files"] or "[]")
             task_file_paths = [ASSIGNMENT_FILES_DIR / str(assignment_id) / n for n in task_file_names]
+
+            notifications.notify_admin(
+                "submission",
+                f"{student['name']} submitted \"{assignment['title']}\"",
+                link=url_for("admin.submission_detail", submission_id=submission_id),
+            )
 
             try:
                 result = grade_submission(
@@ -282,6 +300,30 @@ def change_password():
             success = True
         conn.close()
     return render_template("student/change_password.html", error=error, success=success)
+
+
+# ---- Notifications ----------------------------------------------------
+
+@student_bp.route("/notifications/<int:notification_id>/open")
+@student_required
+def notification_open(notification_id):
+    conn = db.get_db()
+    notif = conn.execute(
+        "SELECT * FROM notifications WHERE id = ? AND recipient_type = 'student' AND recipient_id = ?",
+        (notification_id, session["student_id"]),
+    ).fetchone()
+    if notif:
+        conn.execute("UPDATE notifications SET is_read = 1 WHERE id = ?", (notification_id,))
+        conn.commit()
+    conn.close()
+    return redirect(notif["link"] if notif and notif["link"] else url_for("student.dashboard"))
+
+
+@student_bp.route("/notifications/mark-all-read", methods=["POST"])
+@student_required
+def notifications_mark_all_read():
+    notifications.mark_all_read_student(session["student_id"])
+    return redirect(request.referrer or url_for("student.dashboard"))
 
 
 # ---- File serving (scoped to the logged-in student) -----------------------

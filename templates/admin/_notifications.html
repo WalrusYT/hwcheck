@@ -1,0 +1,32 @@
+<div class="notif-wrap">
+  <button type="button" class="notif-bell" id="admin-notif-bell" aria-label="Notifications">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <path d="M12 3C9.2 3 7 5.2 7 8V11.5L5.5 14.5C5.2 15.1 5.6 15.8 6.3 15.8H17.7C18.4 15.8 18.8 15.1 18.5 14.5L17 11.5V8C17 5.2 14.8 3 12 3Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+      <path d="M9.5 18.5C9.8 19.6 10.8 20.3 12 20.3C13.2 20.3 14.2 19.6 14.5 18.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+    </svg>
+    {% if admin_unread_count %}<span class="notif-badge">{{ admin_unread_count }}</span>{% endif %}
+  </button>
+  <div class="notif-dropdown" id="admin-notif-dropdown" hidden>
+    <div class="notif-header">
+      <strong>Notifications</strong>
+      {% if admin_unread_count %}
+      <form method="post" action="{{ url_for('admin.notifications_mark_all_read') }}">
+        <button type="submit" class="notif-mark-all">Mark all read</button>
+      </form>
+      {% endif %}
+    </div>
+    {% if not admin_notifications %}
+      <p class="muted notif-empty">No notifications yet.</p>
+    {% else %}
+      {% for n in admin_notifications %}
+      <a class="notif-item {{ '' if n['is_read'] else 'notif-unread' }}" href="{{ url_for('admin.notification_open', notification_id=n['id']) }}">
+        <span class="notif-title">{{ n['title'] }}</span>
+        <span class="notif-time muted">{{ n['created_at'] }}</span>
+      </a>
+      {% endfor %}
+    {% endif %}
+  </div>
+</div>
+
+<script src="{{ url_for('static', filename='notifications.js') }}"></script>
+<script>initNotifDropdown('admin-notif-bell', 'admin-notif-dropdown');</script>

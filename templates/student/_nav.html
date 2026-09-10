@@ -4,6 +4,7 @@
   <a href="{{ url_for('student.homeworks') }}">{{ t('nav.homeworks') }}</a>
   <a href="{{ url_for('student.performance_view') }}">{{ t('nav.performance') }}</a>
   <div class="right nav-cluster">
+    {% include "student/_notifications.html" %}
     <form method="post" action="{{ url_for('student.set_language', lang='en') }}" class="lang-form">
       <button type="submit" class="lang-btn {{ 'lang-active' if session.get('lang', 'en') == 'en' else '' }}">EN</button>
     </form>

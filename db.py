@@ -41,6 +41,7 @@ CREATE TABLE IF NOT EXISTS students (
     zoom_link TEXT,
     performance_narrative TEXT,
     performance_narrative_updated_at TEXT,
+    first_login_at TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -76,6 +77,18 @@ CREATE TABLE IF NOT EXISTS hint_chat_messages (
     content TEXT NOT NULL,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS notifications (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    recipient_type TEXT NOT NULL,
+    recipient_id INTEGER,
+    type TEXT NOT NULL,
+    title TEXT NOT NULL,
+    body TEXT,
+    link TEXT,
+    is_read INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 """
 
 
@@ -94,5 +107,9 @@ def init_db():
     columns = {row["name"] for row in conn.execute("PRAGMA table_info(homeworks)")}
     if "task_files" not in columns:
         conn.execute("ALTER TABLE homeworks ADD COLUMN task_files TEXT NOT NULL DEFAULT '[]'")
+    # Migration for databases created before first_login_at existed.
+    student_columns = {row["name"] for row in conn.execute("PRAGMA table_info(students)")}
+    if "first_login_at" not in student_columns:
+        conn.execute("ALTER TABLE students ADD COLUMN first_login_at TEXT")
     conn.commit()
     conn.close()

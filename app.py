@@ -4,11 +4,12 @@ import json
 import os
 
 from dotenv import load_dotenv
-from flask import Flask, redirect, render_template, url_for
+from flask import Flask, redirect, render_template, session, url_for
 
 load_dotenv()
 
 import db
+import notifications
 from admin_routes import admin_bp
 from config import ASSIGNMENT_FILES_DIR, SUBMISSION_FILES_DIR, UPLOAD_DIR
 from student_routes import student_bp
@@ -27,6 +28,18 @@ SUBMISSION_FILES_DIR.mkdir(parents=True, exist_ok=True)
 
 app.register_blueprint(admin_bp)
 app.register_blueprint(student_bp)
+
+
+@app.context_processor
+def inject_notifications():
+    ctx = {}
+    if session.get("is_admin"):
+        ctx["admin_notifications"] = notifications.get_admin_notifications(limit=8)
+        ctx["admin_unread_count"] = notifications.count_unread_admin()
+    if session.get("student_id"):
+        ctx["student_notifications"] = notifications.get_student_notifications(session["student_id"], limit=8)
+        ctx["student_unread_count"] = notifications.count_unread_student(session["student_id"])
+    return ctx
 
 
 @app.route("/")

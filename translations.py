@@ -10,6 +10,9 @@ STRINGS = {
         "nav.performance": "Performance",
         "nav.change_password": "Change password",
         "nav.logout": "Log out",
+        "nav.notifications": "Notifications",
+        "nav.notifications_mark_all": "Mark all read",
+        "nav.notifications_empty": "No notifications yet.",
         "login.title": "Student login",
         "login.username": "Username",
         "login.password": "Password",
@@ -59,6 +62,8 @@ STRINGS = {
         "change_password.wrong_current": "Current password is incorrect.",
         "change_password.mismatch": "New passwords don't match.",
         "change_password.weak": "Please choose a stronger password (at least 8 characters, not a common one).",
+        "notif.graded": '"{title}" has been graded: {grade}',
+        "notif.new_assignment": 'New homework assigned: "{title}"',
     },
     "ru": {
         "site_name": "TutorIlya Homework",
@@ -67,6 +72,9 @@ STRINGS = {
         "nav.performance": "Успеваемость",
         "nav.change_password": "Сменить пароль",
         "nav.logout": "Выйти",
+        "nav.notifications": "Уведомления",
+        "nav.notifications_mark_all": "Отметить всё прочитанным",
+        "nav.notifications_empty": "Пока нет уведомлений.",
         "login.title": "Вход для учеников",
         "login.username": "Логин",
         "login.password": "Пароль",
@@ -116,6 +124,8 @@ STRINGS = {
         "change_password.wrong_current": "Текущий пароль неверен.",
         "change_password.mismatch": "Новые пароли не совпадают.",
         "change_password.weak": "Пожалуйста, выберите более надёжный пароль (минимум 8 символов, не слишком простой).",
+        "notif.graded": "«{title}» проверено. Оценка: {grade}",
+        "notif.new_assignment": "Новое домашнее задание: «{title}»",
     },
 }
 
@@ -125,7 +135,13 @@ def current_lang():
     return lang if lang in STRINGS else "en"
 
 
-def t(key, **kwargs):
-    lang = current_lang()
+def render(key, lang, **kwargs):
+    """Like t(), but for an explicit language rather than the current session's -
+    e.g. building a notification for a student from within the tutor's own request."""
+    lang = lang if lang in STRINGS else "en"
     text = STRINGS.get(lang, STRINGS["en"]).get(key, STRINGS["en"].get(key, key))
     return text.format(**kwargs) if kwargs else text
+
+
+def t(key, **kwargs):
+    return render(key, current_lang(), **kwargs)

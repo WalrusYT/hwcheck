@@ -2,5 +2,8 @@
   <strong>TutorIlya Homework</strong>
   <a href="{{ url_for('admin.dashboard') }}">Submissions</a>
   <a href="{{ url_for('admin.students') }}">Students</a>
-  <a href="{{ url_for('admin.admin_logout') }}" class="right">Log out</a>
+  <div class="right nav-cluster">
+    {% include "admin/_notifications.html" %}
+    <a href="{{ url_for('admin.admin_logout') }}">Log out</a>
+  </div>
 </nav>
