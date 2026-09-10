@@ -87,7 +87,7 @@
   <h2>Danger zone</h2>
   <p class="muted">Permanently deletes this student's account along with all their assignments, submissions, chat history, and notifications. This cannot be undone.</p>
   <form method="post" action="{{ url_for('admin.delete_student', student_id=student['id']) }}"
-        onsubmit="return confirm('Delete {{ student[\'name\']|e }} and ALL their homework, submissions, and chat history? This cannot be undone.');">
+        onsubmit="return confirm('Delete this student and ALL their homework, submissions, and chat history? This cannot be undone.');">
     <button type="submit" class="button-danger">Delete student</button>
   </form>
 </div>
