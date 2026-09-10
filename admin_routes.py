@@ -3,6 +3,7 @@
 import json
 import os
 import secrets
+import shutil
 import sqlite3
 from pathlib import Path
 
@@ -155,6 +156,50 @@ def student_reset_password(student_id):
     conn.close()
     flash(f"New password: {new_password} - share this with the student.")
     return redirect(url_for("admin.student_detail", student_id=student_id))
+
+
+def _delete_student_cascade(conn, student_id):
+    """Delete a student and everything that references them: assignments,
+    submissions, chat history, notifications - plus their uploaded files on disk."""
+    assignment_ids = [
+        r["id"] for r in conn.execute(
+            "SELECT id FROM homework_assignments WHERE student_id = ?", (student_id,)
+        )
+    ]
+    submission_ids = [
+        r["id"] for r in conn.execute(
+            "SELECT id FROM student_submissions WHERE student_id = ?", (student_id,)
+        )
+    ]
+
+    conn.execute("DELETE FROM hint_chat_messages WHERE student_id = ?", (student_id,))
+    conn.execute(
+        "DELETE FROM notifications WHERE recipient_type = 'student' AND recipient_id = ?", (student_id,)
+    )
+    conn.execute("DELETE FROM student_submissions WHERE student_id = ?", (student_id,))
+    conn.execute("DELETE FROM homework_assignments WHERE student_id = ?", (student_id,))
+    conn.execute("DELETE FROM students WHERE id = ?", (student_id,))
+    conn.commit()
+
+    for assignment_id in assignment_ids:
+        shutil.rmtree(ASSIGNMENT_FILES_DIR / str(assignment_id), ignore_errors=True)
+    for submission_id in submission_ids:
+        shutil.rmtree(SUBMISSION_FILES_DIR / str(submission_id), ignore_errors=True)
+
+
+@admin_bp.route("/students/<int:student_id>/delete", methods=["POST"])
+@admin_required
+def delete_student(student_id):
+    conn = db.get_db()
+    student = conn.execute("SELECT name FROM students WHERE id = ?", (student_id,)).fetchone()
+    if not student:
+        conn.close()
+        abort(404)
+    name = student["name"]
+    _delete_student_cascade(conn, student_id)
+    conn.close()
+    flash(f"Deleted student '{name}' and all their homework data.")
+    return redirect(url_for("admin.students"))
 
 
 @admin_bp.route("/students/<int:student_id>/assignments", methods=["POST"])

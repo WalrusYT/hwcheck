@@ -183,6 +183,15 @@ button, .button {
   border: 1px solid var(--border);
 }
 
+.button-secondary.button-danger {
+  color: var(--bad);
+  border-color: var(--bad);
+}
+
+.button-secondary.button-danger:hover {
+  background: var(--bad-bg);
+}
+
 .logo {
   display: inline-flex;
   align-items: center;
