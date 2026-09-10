@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}{{ assignment['title'] }} - {{ t('site_name') }}{% endblock %}
+{% block content %}
+{% include "student/_nav.html" %}
+
+{% set published = submissions | selectattr('feedback_published') | list %}
+
+<div class="card wide">
+  <a href="{{ url_for('student.homeworks') }}" class="muted">← {{ t('nav.homeworks') }}</a>
+  <h1>{{ assignment['title'] }}</h1>
+  {% if assignment['topic'] %}<p class="muted">{{ assignment['topic'] }}</p>{% endif %}
+
+  <h2>{{ t('homework.task_files') }}</h2>
+  {% if not task_files %}
+    <p class="muted">{{ t('homework.no_task_files') }}</p>
+  {% else %}
+  <div class="files">
+    {% for f in task_files %}
+      <a href="{{ url_for('student.task_file', assignment_id=assignment['id'], filename=f) }}" target="_blank">
+        {% if f.lower().endswith('.pdf') %}📄 {{ t('homework.download') }}: {{ f }}
+        {% else %}<img src="{{ url_for('student.task_file', assignment_id=assignment['id'], filename=f) }}" alt="{{ f }}">{% endif %}
+      </a>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if published %}
+    {% set latest = published[0] %}
+    <h2>{{ t('homework.your_grade') }}</h2>
+    <p><span class="badge badge-reviewed">{{ latest['tutor_grade'] }}</span></p>
+    {% if latest['tutor_comment'] %}
+      <h2>{{ t('homework.tutor_comment') }}</h2>
+      <p>{{ latest['tutor_comment'] }}</p>
+    {% endif %}
+  {% endif %}
+
+  <h2>{{ t('homework.submit_title') }}</h2>
+  {% if errors %}
+    <div class="errors">{% for e in errors %}<div>{{ e }}</div>{% endfor %}</div>
+  {% endif %}
+  <form method="post" enctype="multipart/form-data" id="submit-form" class="form">
+    <div id="file-thumbs" class="files"></div>
+    <input type="file" id="file-input" name="files" accept="image/*,.pdf" multiple hidden>
+    <div class="form-row">
+      <button type="button" id="add-files-btn" class="button-secondary">{{ t('homework.add_photos') }}</button>
+    </div>
+    <button type="submit">{{ t('homework.submit') }}</button>
+  </form>
+
+  {% if submissions %}
+  <h2>{{ t('homework.previous_submissions') }}</h2>
+  <div class="table-wrap">
+  <table class="table">
+    <tbody>
+      {% for s in submissions %}
+      <tr>
+        <td>{{ s['submitted_at'] }}</td>
+        <td>
+          {% if s['feedback_published'] %}<span class="badge badge-reviewed">{{ t('homeworks.status.reviewed') }} - {{ s['tutor_grade'] }}</span>
+          {% else %}<span class="badge">{{ t('homework.submitted_status') }}</span>{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% endif %}
+</div>
+
+{% if not published %}
+<div class="card wide" id="chat-card" data-chat-url="{{ url_for('student.homework_chat_endpoint', assignment_id=assignment['id']) }}">
+  <h2>{{ t('chat.title') }}</h2>
+  <div id="chat-messages" class="chat">
+    {% if not chat_history %}
+      <div class="msg bot"><div class="bubble">{{ t('chat.intro') }}</div></div>
+    {% else %}
+      {% for m in chat_history %}
+        <div class="msg {{ 'user' if m['role'] == 'user' else 'bot' }}"><div class="bubble">{{ m['content'] }}</div></div>
+      {% endfor %}
+    {% endif %}
+  </div>
+  <form id="chat-form" class="composer">
+    <textarea id="chat-input" rows="1" placeholder="{{ t('chat.placeholder') }}"></textarea>
+    <button type="submit">{{ t('chat.send') }}</button>
+  </form>
+</div>
+{% endif %}
+
+<script src="{{ url_for('static', filename='upload.js') }}"></script>
+{% if not published %}
+<script src="{{ url_for('static', filename='homework_chat.js') }}"></script>
+{% endif %}
+<script>
+  initUploadWidget("file-input", "file-thumbs", "add-files-btn");
+  {% if not published %}
+  initHomeworkChat("chat-card", "chat-messages", "chat-form", "chat-input");
+  {% endif %}
+</script>
+{% endblock %}

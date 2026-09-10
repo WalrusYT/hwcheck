@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}Submission #{{ submission['id'] }} - TutorIlya Homework{% endblock %}
+{% block content %}
+{% include "admin/_nav.html" %}
+
+<div class="card wide">
+  <a href="{{ url_for('admin.dashboard') }}" class="muted">← back to submissions</a>
+  <h1>{{ student['name'] }} — {{ assignment['title'] }}</h1>
+  <p class="muted">
+    Submitted {{ submission['submitted_at'] }}
+    {% if assignment and assignment['topic'] %} · Topic: {{ assignment['topic'] }}{% endif %}
+    · <a href="{{ url_for('admin.student_detail', student_id=student['id']) }}">View student →</a>
+  </p>
+
+  {% if task_files %}
+  <h2>Assigned homework sheet</h2>
+  <div class="files">
+    {% for f in task_files %}
+      <a href="{{ url_for('admin.assignment_file', assignment_id=assignment['id'], filename=f) }}" target="_blank">
+        {% if f.lower().endswith('.pdf') %}📄 {{ f }}
+        {% else %}<img src="{{ url_for('admin.assignment_file', assignment_id=assignment['id'], filename=f) }}" alt="{{ f }}">{% endif %}
+      </a>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <h2>Submitted files</h2>
+  <div class="files">
+    {% for f in files %}
+      <a href="{{ url_for('admin.submission_file', submission_id=submission['id'], filename=f) }}" target="_blank">
+        {% if f.lower().endswith('.pdf') %}📄 {{ f }}
+        {% else %}<img src="{{ url_for('admin.submission_file', submission_id=submission['id'], filename=f) }}" alt="{{ f }}">{% endif %}
+      </a>
+    {% endfor %}
+  </div>
+
+  <h2>AI review (draft — verify before publishing)</h2>
+  {% if submission['ai_status'] == 'error' %}
+    <div class="errors">AI grading failed: {{ submission['ai_error'] }}</div>
+  {% elif not ai_result %}
+    <p class="muted">Still processing…</p>
+  {% else %}
+    <p>{{ ai_result['overall_summary'] }}</p>
+    <p><strong>Estimated score:</strong> {{ ai_result['estimated_score'] }}</p>
+
+    {% if ai_result['flags_for_tutor'] %}
+      <div class="flags">
+        <strong>Flags for you to double-check:</strong>
+        <ul>{% for f in ai_result['flags_for_tutor'] %}<li>{{ f }}</li>{% endfor %}</ul>
+      </div>
+    {% endif %}
+
+    <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr><th>Problem</th><th>Student answer</th><th>Correct answer</th><th>Verdict</th><th>Confidence</th><th>Explanation</th></tr>
+      </thead>
+      <tbody>
+        {% for p in ai_result['problems'] %}
+        <tr>
+          <td><strong>{{ p['problem_label'] }}</strong><br><span class="muted">{{ p['problem_text'] }}</span></td>
+          <td>{{ p['student_answer'] }}</td>
+          <td>{{ p['correct_answer'] }}</td>
+          <td><span class="badge badge-{{ p['verdict'] }}">{{ p['verdict'].replace('_', ' ') }}</span></td>
+          <td><span class="badge badge-conf-{{ p['confidence'] }}">{{ p['confidence'] }}</span></td>
+          <td>{{ p['explanation'] }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  {% endif %}
+
+  <h2>Grade &amp; feedback for the student</h2>
+  {% if submission['feedback_published'] %}
+    <p class="badge badge-reviewed">Published to student</p>
+  {% endif %}
+  <form method="post" class="form">
+    <label>
+      Grade
+      <select name="grade">
+        <option value="">— pick a grade —</option>
+        {% for g in ['A', 'B', 'C', 'D', 'F'] %}
+          <option value="{{ g }}" {{ 'selected' if submission['tutor_grade'] == g else '' }}>{{ g }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <textarea name="tutor_comment" rows="4" placeholder="Comment the student will see...">{{ submission['tutor_comment'] or '' }}</textarea>
+    <div class="form-row">
+      <button type="submit" name="action" value="draft" class="button-secondary">Save draft</button>
+      <button type="submit" name="action" value="publish">Publish feedback to student</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

@@ -4,3 +4,4 @@ __pycache__/
 hwcheck.db
 uploads/
 .idea/
+server.log

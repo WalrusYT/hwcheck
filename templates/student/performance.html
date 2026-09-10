@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}{{ t('nav.performance') }} - {{ t('site_name') }}{% endblock %}
+{% block content %}
+{% include "student/_nav.html" %}
+
+<div class="card wide">
+  <h1>{{ t('performance.title') }}</h1>
+
+  <p>
+    <strong>{{ t('performance.average') }}:</strong>
+    {% if letter %}{{ letter }} ({{ gpa }}/4.0){% else %}{{ t('performance.no_grades') }}{% endif %}
+  </p>
+
+  {% if student['performance_narrative'] %}
+    <div class="flags">{{ student['performance_narrative'] }}</div>
+  {% elif letter %}
+    <p class="muted">{{ t('performance.narrative_pending') }}</p>
+  {% endif %}
+
+  <h2>{{ t('performance.history') }}</h2>
+  {% if not history %}
+    <p class="muted">{{ t('performance.no_grades') }}</p>
+  {% else %}
+  <div class="table-wrap">
+  <table class="table">
+    <thead><tr><th>{{ t('homeworks.title') }}</th><th>{{ t('performance.average') }}</th><th>{{ t('homework.tutor_comment') }}</th></tr></thead>
+    <tbody>
+      {% for h in history %}
+      <tr>
+        <td>{{ h['assignment_title'] }}</td>
+        <td><span class="badge badge-{{ h['tutor_grade'] }}">{{ h['tutor_grade'] }}</span></td>
+        <td>{{ h['tutor_comment'] or '—' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

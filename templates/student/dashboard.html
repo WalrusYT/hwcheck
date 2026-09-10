@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}{{ t('nav.dashboard') }} - {{ t('site_name') }}{% endblock %}
+{% block content %}
+{% include "student/_nav.html" %}
+
+<div class="card wide">
+  <h1>{{ t('dashboard.welcome', name=student['name']) }}</h1>
+</div>
+
+<div class="card wide">
+  <h2 class="section-title">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <rect x="3" y="5" width="18" height="16" rx="2.5" stroke="#2563eb" stroke-width="1.8"/>
+      <path d="M3 9.5H21" stroke="#2563eb" stroke-width="1.8"/>
+      <path d="M7.5 3V6.5M16.5 3V6.5" stroke="#2563eb" stroke-width="1.8" stroke-linecap="round"/>
+    </svg>
+    {{ t('dashboard.schedule') }}
+  </h2>
+  <p>{{ student['schedule_text'] or t('dashboard.no_schedule') }}</p>
+
+  <div class="quick-links">
+    {% if student['miro_link'] %}
+      <a class="quick-link" href="{{ student['miro_link'] }}" target="_blank">
+        <span class="quick-link-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <rect x="3" y="4" width="18" height="14" rx="2" stroke="white" stroke-width="1.8"/>
+            <circle cx="8" cy="10" r="1.4" fill="white"/>
+            <path d="M6 15L10 11L13 14L18 8" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M9 21H15" stroke="white" stroke-width="1.8" stroke-linecap="round"/>
+            <path d="M12 18V21" stroke="white" stroke-width="1.8" stroke-linecap="round"/>
+          </svg>
+        </span>
+        <span>{{ t('dashboard.miro') }}</span>
+      </a>
+    {% else %}
+      <span class="muted">{{ t('dashboard.no_miro') }}</span>
+    {% endif %}
+
+    {% if student['zoom_link'] %}
+      <a class="quick-link" href="{{ student['zoom_link'] }}" target="_blank">
+        <span class="quick-link-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <rect x="2.5" y="6.5" width="13" height="11" rx="2.5" fill="white"/>
+            <path d="M15.5 10.2L21 7V17L15.5 13.8V10.2Z" fill="white"/>
+          </svg>
+        </span>
+        <span>{{ t('dashboard.zoom') }}</span>
+      </a>
+    {% else %}
+      <span class="muted">{{ t('dashboard.no_zoom') }}</span>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

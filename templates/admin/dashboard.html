@@ -1,12 +1,7 @@
 {% extends "base.html" %}
-{% block title %}Dashboard - HWCheck{% endblock %}
+{% block title %}Dashboard - TutorIlya Homework{% endblock %}
 {% block content %}
-<nav class="admin-nav">
-  <strong>HWCheck admin</strong>
-  <a href="{{ url_for('admin_dashboard') }}">Submissions</a>
-  <a href="{{ url_for('admin_homeworks') }}">Homework codes</a>
-  <a href="{{ url_for('admin_logout') }}" class="right">Log out</a>
-</nav>
+{% include "admin/_nav.html" %}
 
 <div class="card wide">
   <h1>Submissions</h1>
@@ -27,20 +22,20 @@
     </thead>
     <tbody>
       {% for s in submissions %}
-      <tr class="{{ 'row-new' if s['tutor_status'] == 'new' else '' }}">
+      <tr class="{{ 'row-new' if not s['feedback_published'] else '' }}">
         <td>
-          {% if s['tutor_status'] == 'new' %}<span class="badge badge-new">New</span>
-          {% else %}<span class="badge badge-reviewed">Reviewed</span>{% endif %}
+          {% if s['feedback_published'] %}<span class="badge badge-reviewed">Reviewed ({{ s['tutor_grade'] }})</span>
+          {% else %}<span class="badge badge-new">New</span>{% endif %}
         </td>
         <td>{{ s['student_name'] }}</td>
-        <td>{{ s['homework_code'] }}</td>
+        <td>{{ s['assignment_title'] }}</td>
         <td>{{ s['submitted_at'] }}</td>
         <td>
           {% if s['ai_status'] == 'done' %}<span class="badge badge-done">Ready</span>
           {% elif s['ai_status'] == 'error' %}<span class="badge badge-error">Error</span>
           {% else %}<span class="badge">Pending</span>{% endif %}
         </td>
-        <td><a href="{{ url_for('admin_submission_detail', submission_id=s['id']) }}">View →</a></td>
+        <td><a href="{{ url_for('admin.submission_detail', submission_id=s['id']) }}">View →</a></td>
       </tr>
       {% endfor %}
     </tbody>

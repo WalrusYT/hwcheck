@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Students - TutorIlya Homework{% endblock %}
+{% block content %}
+{% include "admin/_nav.html" %}
+
+<div class="card wide">
+  <h1>Create a student</h1>
+  <p class="muted">Pick a username and password, then share them with the student yourself.</p>
+  <form method="post" class="form">
+    <div class="form-row">
+      <label>
+        Full name
+        <input type="text" name="name" required>
+      </label>
+      <label>
+        Username
+        <input type="text" name="username" required style="text-transform:lowercase">
+      </label>
+      <label>
+        Password <span class="muted">(optional, auto-generated if left blank)</span>
+        <input type="text" name="password" placeholder="{{ suggested_password }}" minlength="8">
+      </label>
+    </div>
+    <label>
+      Schedule note <span class="muted">(optional)</span>
+      <input type="text" name="schedule_text" placeholder="e.g. Tuesdays 18:00, Fridays 18:00 (Lisbon time)">
+    </label>
+    <label>
+      Miro board link <span class="muted">(optional)</span>
+      <input type="url" name="miro_link" placeholder="https://miro.com/app/board/...">
+    </label>
+    <label>
+      Zoom link <span class="muted">(optional)</span>
+      <input type="url" name="zoom_link" placeholder="https://zoom.us/j/...">
+    </label>
+    <button type="submit">Create student</button>
+  </form>
+</div>
+
+<div class="card wide">
+  <h2>Existing students</h2>
+  {% if not students %}
+    <p class="muted">No students yet.</p>
+  {% else %}
+  <div class="table-wrap">
+  <table class="table">
+    <thead><tr><th>Name</th><th>Username</th><th>Created</th><th></th></tr></thead>
+    <tbody>
+      {% for s in students %}
+      <tr>
+        <td>{{ s['name'] }}</td>
+        <td><code>{{ s['username'] }}</code></td>
+        <td>{{ s['created_at'] }}</td>
+        <td><a href="{{ url_for('admin.student_detail', student_id=s['id']) }}">View →</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

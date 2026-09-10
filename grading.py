@@ -5,12 +5,12 @@ This is a first pass for the tutor to review, not a final grade - low
 confidence and unclear items are flagged rather than guessed at.
 """
 
-import base64
 import json
 import os
 
-import pymupdf as fitz
 from openai import OpenAI
+
+from image_utils import file_to_image_data_urls
 
 MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o")
 
@@ -111,28 +111,6 @@ class GradingError(Exception):
     pass
 
 
-def _file_to_image_data_urls(file_path):
-    """Convert an uploaded image or PDF into a list of base64 data URLs (one per page/image)."""
-    ext = file_path.suffix.lower()
-    urls = []
-    if ext == ".pdf":
-        doc = fitz.open(file_path)
-        try:
-            for page in doc:
-                pix = page.get_pixmap(dpi=200)
-                png_bytes = pix.tobytes("png")
-                b64 = base64.b64encode(png_bytes).decode("utf-8")
-                urls.append(f"data:image/png;base64,{b64}")
-        finally:
-            doc.close()
-    else:
-        media_type = "image/jpeg" if ext in (".jpg", ".jpeg") else "image/png"
-        with open(file_path, "rb") as f:
-            b64 = base64.b64encode(f.read()).decode("utf-8")
-        urls.append(f"data:{media_type};base64,{b64}")
-    return urls
-
-
 def grade_submission(file_paths, student_name, topic=None, task_file_paths=None):
     """file_paths: list of pathlib.Path to the student's uploaded files.
     task_file_paths: optional list of pathlib.Path to the tutor's uploaded
@@ -152,12 +130,12 @@ def grade_submission(file_paths, student_name, topic=None, task_file_paths=None)
     if task_file_paths:
         content.append({"type": "text", "text": "Assigned homework (the problem sheet the tutor gave the student):"})
         for file_path in task_file_paths:
-            for url in _file_to_image_data_urls(file_path):
+            for url in file_to_image_data_urls(file_path):
                 content.append({"type": "image_url", "image_url": {"url": url}})
 
     content.append({"type": "text", "text": "Student submission (grade this):"})
     for file_path in file_paths:
-        for url in _file_to_image_data_urls(file_path):
+        for url in file_to_image_data_urls(file_path):
             content.append({"type": "image_url", "image_url": {"url": url}})
 
     try:

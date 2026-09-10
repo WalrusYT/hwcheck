@@ -1,0 +1,16 @@
+<nav class="student-nav">
+  {% include "student/_logo.html" %}
+  <a href="{{ url_for('student.dashboard') }}">{{ t('nav.dashboard') }}</a>
+  <a href="{{ url_for('student.homeworks') }}">{{ t('nav.homeworks') }}</a>
+  <a href="{{ url_for('student.performance_view') }}">{{ t('nav.performance') }}</a>
+  <div class="right nav-cluster">
+    <form method="post" action="{{ url_for('student.set_language', lang='en') }}" class="lang-form">
+      <button type="submit" class="lang-btn {{ 'lang-active' if session.get('lang', 'en') == 'en' else '' }}">EN</button>
+    </form>
+    <form method="post" action="{{ url_for('student.set_language', lang='ru') }}" class="lang-form">
+      <button type="submit" class="lang-btn {{ 'lang-active' if session.get('lang') == 'ru' else '' }}">RU</button>
+    </form>
+    <a href="{{ url_for('student.change_password') }}">{{ t('nav.change_password') }}</a>
+    <a href="{{ url_for('student.logout') }}">{{ t('nav.logout') }}</a>
+  </div>
+</nav>

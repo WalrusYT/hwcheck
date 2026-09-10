@@ -1,0 +1,90 @@
+"""Hint-only chatbot scoped to one homework assignment.
+
+Gives guidance, not answers: it can explain concepts, ask guiding
+questions, name a relevant formula or first step, and check the student's
+own reasoning, but must never state a final answer to an assigned problem
+or solve one end-to-end.
+"""
+
+import os
+
+from openai import OpenAI
+
+from image_utils import file_to_image_data_urls
+
+MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o")
+HISTORY_LIMIT = 20
+
+SYSTEM_PROMPT = {
+    "en": (
+        "You are a friendly math tutoring assistant helping a student with one "
+        "specific homework assignment, whose problem sheet is attached as "
+        "image(s) below. Your job is to help the student think it through "
+        "themselves, not to do it for them.\n\n"
+        "Rules:\n"
+        "- You may explain relevant concepts, ask guiding questions, point out "
+        "what a problem is testing, suggest a first step or relevant formula, "
+        "and check whether the student's own reasoning or partial work is on "
+        "the right track.\n"
+        "- Never state the final numeric or algebraic answer to any problem on "
+        "this sheet, and never fully solve a problem end-to-end for the "
+        "student.\n"
+        "- If the student directly asks for 'the answer' or to 'just solve it', "
+        "politely decline and offer a hint or a guiding question instead.\n"
+        "- Keep responses short and conversational - a couple of sentences, not "
+        "an essay.\n"
+        "- Respond in English."
+    ),
+    "ru": (
+        "Ты - дружелюбный ассистент-репетитор по математике, который помогает "
+        "ученику с одним конкретным домашним заданием; лист с задачами приложен "
+        "ниже в виде изображений. Твоя задача - помочь ученику самому "
+        "разобраться, а не решить задание за него.\n\n"
+        "Правила:\n"
+        "- Ты можешь объяснять понятия, задавать наводящие вопросы, указывать, "
+        "что именно проверяет задача, предлагать первый шаг или нужную формулу, "
+        "и проверять, на правильном ли пути рассуждения или черновик ученика.\n"
+        "- Никогда не называй итоговый числовой или алгебраический ответ ни к "
+        "одной задаче из этого листа и никогда не решай задачу целиком за "
+        "ученика.\n"
+        "- Если ученик прямо просит 'дай ответ' или 'просто реши', вежливо "
+        "откажи и предложи подсказку или наводящий вопрос вместо этого.\n"
+        "- Отвечай коротко и по-дружески - пара предложений, не эссе.\n"
+        "- Отвечай на русском языке."
+    ),
+}
+
+
+class ChatError(Exception):
+    pass
+
+
+def reply(task_file_paths, history, lang="en"):
+    """task_file_paths: list of pathlib.Path to the assignment's problem sheet.
+    history: list of {"role": "user"|"assistant", "content": str}, oldest first,
+    already including the latest user message. Returns the assistant's reply text.
+    """
+    client = OpenAI()
+    system_prompt = SYSTEM_PROMPT.get(lang, SYSTEM_PROMPT["en"])
+
+    messages = [{"role": "system", "content": system_prompt}]
+
+    trimmed = history[-HISTORY_LIMIT:]
+    first_user_index = next((i for i, m in enumerate(trimmed) if m["role"] == "user"), None)
+
+    for i, turn in enumerate(trimmed):
+        if i == first_user_index and task_file_paths:
+            content = [{"type": "text", "text": turn["content"]}]
+            for file_path in task_file_paths:
+                for url in file_to_image_data_urls(file_path):
+                    content.append({"type": "image_url", "image_url": {"url": url}})
+            messages.append({"role": "user", "content": content})
+        else:
+            messages.append({"role": turn["role"], "content": turn["content"]})
+
+    try:
+        response = client.chat.completions.create(model=MODEL, messages=messages)
+    except Exception as exc:
+        raise ChatError(str(exc)) from exc
+
+    return response.choices[0].message.content

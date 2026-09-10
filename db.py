@@ -29,6 +29,53 @@ CREATE TABLE IF NOT EXISTS submissions (
     submitted_at TEXT NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY (homework_code) REFERENCES homeworks(code)
 );
+
+CREATE TABLE IF NOT EXISTS students (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    username TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    language TEXT NOT NULL DEFAULT 'en',
+    schedule_text TEXT,
+    miro_link TEXT,
+    zoom_link TEXT,
+    performance_narrative TEXT,
+    performance_narrative_updated_at TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS homework_assignments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    student_id INTEGER NOT NULL REFERENCES students(id),
+    title TEXT NOT NULL,
+    topic TEXT,
+    task_files TEXT NOT NULL DEFAULT '[]',
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS student_submissions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    assignment_id INTEGER NOT NULL REFERENCES homework_assignments(id),
+    student_id INTEGER NOT NULL REFERENCES students(id),
+    files TEXT NOT NULL DEFAULT '[]',
+    ai_result TEXT,
+    ai_status TEXT NOT NULL DEFAULT 'pending',
+    ai_error TEXT,
+    tutor_grade TEXT,
+    tutor_comment TEXT,
+    feedback_published INTEGER NOT NULL DEFAULT 0,
+    submitted_at TEXT NOT NULL DEFAULT (datetime('now')),
+    reviewed_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS hint_chat_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    assignment_id INTEGER NOT NULL REFERENCES homework_assignments(id),
+    student_id INTEGER NOT NULL REFERENCES students(id),
+    role TEXT NOT NULL,
+    content TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 """
 
 

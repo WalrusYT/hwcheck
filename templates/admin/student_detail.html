@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}{{ student['name'] }} - TutorIlya Homework{% endblock %}
+{% block content %}
+{% include "admin/_nav.html" %}
+
+<div class="card wide">
+  <a href="{{ url_for('admin.students') }}" class="muted">← back to students</a>
+  <h1>{{ student['name'] }}</h1>
+  <p class="muted">Username: <code>{{ student['username'] }}</code> ·
+    <a href="{{ url_for('admin.student_performance', student_id=student['id']) }}">View performance →</a>
+  </p>
+
+  <form method="post" action="{{ url_for('admin.student_update', student_id=student['id']) }}" class="form">
+    <label>
+      Full name
+      <input type="text" name="name" value="{{ student['name'] }}" required>
+    </label>
+    <label>
+      Schedule note
+      <input type="text" name="schedule_text" value="{{ student['schedule_text'] or '' }}">
+    </label>
+    <label>
+      Miro board link
+      <input type="url" name="miro_link" value="{{ student['miro_link'] or '' }}">
+    </label>
+    <label>
+      Zoom link
+      <input type="url" name="zoom_link" value="{{ student['zoom_link'] or '' }}">
+    </label>
+    <button type="submit">Save changes</button>
+  </form>
+
+  <form method="post" action="{{ url_for('admin.student_reset_password', student_id=student['id']) }}" style="margin-top:14px">
+    <button type="submit" class="button-secondary">Reset password</button>
+  </form>
+</div>
+
+<div class="card wide">
+  <h2>Create an assignment</h2>
+  <form method="post" action="{{ url_for('admin.create_assignment', student_id=student['id']) }}" enctype="multipart/form-data" class="form">
+    <div class="form-row">
+      <label>
+        Title
+        <input type="text" name="title" placeholder="e.g. Chapter 4 worksheet" required>
+      </label>
+      <label>
+        Topic / context <span class="muted">(optional)</span>
+        <input type="text" name="topic" placeholder="e.g. Factoring quadratics">
+      </label>
+    </div>
+    <label>
+      Homework sheet <span class="muted">(optional but recommended - photo/PDF of the problems)</span>
+      <input type="file" name="task_files" accept="image/*,.pdf" multiple>
+    </label>
+    <button type="submit">Create assignment</button>
+  </form>
+</div>
+
+<div class="card wide">
+  <h2>Assignments</h2>
+  {% if not assignments %}
+    <p class="muted">No assignments yet.</p>
+  {% else %}
+  <div class="table-wrap">
+  <table class="table">
+    <thead><tr><th>Title</th><th>Topic</th><th>Files</th><th>Created</th></tr></thead>
+    <tbody>
+      {% for a in assignments %}
+      <tr>
+        <td>{{ a['title'] }}</td>
+        <td>{{ a['topic'] or '—' }}</td>
+        <td>
+          {% set task_count = (a['task_files'] | fromjson | length) %}
+          {% if task_count %}<span class="badge badge-done">{{ task_count }} file{{ 's' if task_count != 1 else '' }}</span>
+          {% else %}<span class="muted">none</span>{% endif %}
+        </td>
+        <td>{{ a['created_at'] }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
