@@ -75,6 +75,8 @@
   {% if submission['feedback_published'] %}
     <p class="badge badge-reviewed">Published to student</p>
   {% endif %}
+
+  {% if show_form %}
   <form method="post" class="form">
     <label>
       Grade
@@ -91,5 +93,14 @@
       <button type="submit" name="action" value="publish">Publish feedback to student</button>
     </div>
   </form>
+  {% else %}
+  <p><span class="badge badge-{{ submission['tutor_grade'] }}">{{ submission['tutor_grade'] }}</span></p>
+  {% if submission['tutor_comment'] %}
+    <p>{{ submission['tutor_comment'] }}</p>
+  {% else %}
+    <p class="muted">No comment left.</p>
+  {% endif %}
+  <a href="{{ url_for('admin.submission_detail', submission_id=submission['id'], edit=1) }}" class="button button-secondary button-accent">Edit feedback</a>
+  {% endif %}
 </div>
 {% endblock %}

@@ -261,6 +261,43 @@ def create_assignment(student_id):
     return redirect(url_for("admin.student_detail", student_id=student_id))
 
 
+def _delete_assignment_cascade(conn, assignment_id):
+    """Delete an assignment and everything that references it: submissions
+    and chat history - plus files on disk for the assignment and its submissions."""
+    submission_ids = [
+        r["id"] for r in conn.execute(
+            "SELECT id FROM student_submissions WHERE assignment_id = ?", (assignment_id,)
+        )
+    ]
+
+    conn.execute("DELETE FROM hint_chat_messages WHERE assignment_id = ?", (assignment_id,))
+    conn.execute("DELETE FROM student_submissions WHERE assignment_id = ?", (assignment_id,))
+    conn.execute("DELETE FROM homework_assignments WHERE id = ?", (assignment_id,))
+    conn.commit()
+
+    for submission_id in submission_ids:
+        shutil.rmtree(SUBMISSION_FILES_DIR / str(submission_id), ignore_errors=True)
+    shutil.rmtree(ASSIGNMENT_FILES_DIR / str(assignment_id), ignore_errors=True)
+
+
+@admin_bp.route("/assignments/<int:assignment_id>/delete", methods=["POST"])
+@admin_required
+def delete_assignment(assignment_id):
+    conn = db.get_db()
+    assignment = conn.execute(
+        "SELECT title, student_id FROM homework_assignments WHERE id = ?", (assignment_id,)
+    ).fetchone()
+    if not assignment:
+        conn.close()
+        abort(404)
+    student_id = assignment["student_id"]
+    title = assignment["title"]
+    _delete_assignment_cascade(conn, assignment_id)
+    conn.close()
+    flash(f"Deleted assignment '{title}'.")
+    return redirect(url_for("admin.student_detail", student_id=student_id))
+
+
 # ---- Performance -------------------------------------------------------
 
 @admin_bp.route("/students/<int:student_id>/performance")
@@ -363,6 +400,7 @@ def submission_detail(submission_id):
             flash("Pick a grade before publishing.")
         else:
             if publish:
+                previous_grade = submission["tutor_grade"]
                 conn.execute(
                     """UPDATE student_submissions
                        SET tutor_grade = ?, tutor_comment = ?, feedback_published = 1,
@@ -373,18 +411,19 @@ def submission_detail(submission_id):
                 conn.commit()
                 _refresh_narrative(conn, submission["student_id"])
                 conn.commit()
-                assignment_title = conn.execute(
-                    "SELECT title FROM homework_assignments WHERE id = ?", (submission["assignment_id"],)
-                ).fetchone()["title"]
-                student_lang = conn.execute(
-                    "SELECT language FROM students WHERE id = ?", (submission["student_id"],)
-                ).fetchone()["language"]
-                notifications.notify_student(
-                    submission["student_id"],
-                    "feedback_published",
-                    translations.render("notif.graded", student_lang, title=assignment_title, grade=grade),
-                    link=url_for("student.homework_detail", assignment_id=submission["assignment_id"]),
-                )
+                if grade != previous_grade:
+                    assignment_title = conn.execute(
+                        "SELECT title FROM homework_assignments WHERE id = ?", (submission["assignment_id"],)
+                    ).fetchone()["title"]
+                    student_lang = conn.execute(
+                        "SELECT language FROM students WHERE id = ?", (submission["student_id"],)
+                    ).fetchone()["language"]
+                    notifications.notify_student(
+                        submission["student_id"],
+                        "feedback_published",
+                        translations.render("notif.graded", student_lang, title=assignment_title, grade=grade),
+                        link=url_for("student.homework_detail", assignment_id=submission["assignment_id"]),
+                    )
                 flash("Feedback published to student.")
             else:
                 conn.execute(
@@ -393,7 +432,8 @@ def submission_detail(submission_id):
                 )
                 conn.commit()
                 flash("Draft saved.")
-        submission = conn.execute("SELECT * FROM student_submissions WHERE id = ?", (submission_id,)).fetchone()
+        conn.close()
+        return redirect(url_for("admin.submission_detail", submission_id=submission_id))
 
     assignment = conn.execute(
         "SELECT * FROM homework_assignments WHERE id = ?", (submission["assignment_id"],)
@@ -404,6 +444,7 @@ def submission_detail(submission_id):
     files = json.loads(submission["files"] or "[]")
     task_files = json.loads(assignment["task_files"] or "[]") if assignment else []
     ai_result = json.loads(submission["ai_result"]) if submission["ai_result"] else None
+    show_form = not submission["feedback_published"] or request.args.get("edit") == "1"
 
     return render_template(
         "admin/submission_detail.html",
@@ -413,6 +454,7 @@ def submission_detail(submission_id):
         files=files,
         task_files=task_files,
         ai_result=ai_result,
+        show_form=show_form,
     )
 
 
