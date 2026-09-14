@@ -12,6 +12,7 @@ from flask import (
     Response,
     abort,
     flash,
+    jsonify,
     redirect,
     render_template,
     request,
@@ -22,13 +23,13 @@ from flask import (
 from werkzeug.utils import secure_filename
 
 import db
+import grading_jobs
 import notifications
 import performance
 import translations
 import performance_pdf
 from auth import admin_required, hash_password, password_error
 from config import ALLOWED_EXT, ASSIGNMENT_FILES_DIR, MAX_FILES, SUBMISSION_FILES_DIR
-from grading import GradingError, grade_submission
 
 admin_bp = Blueprint("admin", __name__, url_prefix="/admin")
 
@@ -481,6 +482,17 @@ def submission_detail(submission_id):
     )
 
 
+@admin_bp.route("/submissions/<int:submission_id>/status")
+@admin_required
+def submission_status(submission_id):
+    conn = db.get_db()
+    row = conn.execute("SELECT ai_status FROM student_submissions WHERE id = ?", (submission_id,)).fetchone()
+    conn.close()
+    if not row:
+        abort(404)
+    return jsonify(status=row["ai_status"])
+
+
 @admin_bp.route("/submissions/<int:submission_id>/delete", methods=["POST"])
 @admin_required
 def delete_submission(submission_id):
@@ -521,30 +533,23 @@ def regrade_submission(submission_id):
     sub_dir = SUBMISSION_FILES_DIR / str(submission_id)
     task_file_names = json.loads(assignment["task_files"] or "[]") if assignment else []
     task_file_paths = [ASSIGNMENT_FILES_DIR / str(submission["assignment_id"]) / n for n in task_file_names]
+    student_name = student["name"]
+    topic = assignment["topic"] if assignment else None
 
-    try:
-        result = grade_submission(
-            [sub_dir / n for n in files],
-            student["name"],
-            assignment["topic"] if assignment else None,
-            task_file_paths=task_file_paths,
-            tutor_note=tutor_note,
-        )
-        conn.execute(
-            """UPDATE student_submissions
-               SET ai_result = ?, ai_status = 'done', ai_error = NULL, tutor_result = NULL
-               WHERE id = ?""",
-            (json.dumps(result), submission_id),
-        )
-        flash("AI rechecked the submission with your note - your previous table edits were reset, please review the new draft.")
-    except GradingError as exc:
-        conn.execute(
-            "UPDATE student_submissions SET ai_status = 'error', ai_error = ? WHERE id = ?",
-            (str(exc), submission_id),
-        )
-        flash("Recheck failed - see the error below.")
+    conn.execute("UPDATE student_submissions SET ai_status = 'pending', ai_error = NULL WHERE id = ?", (submission_id,))
     conn.commit()
     conn.close()
+
+    grading_jobs.start_grading_job(
+        submission_id,
+        [sub_dir / n for n in files],
+        student_name,
+        topic,
+        task_file_paths=task_file_paths,
+        tutor_note=tutor_note,
+        reset_tutor_result=True,
+    )
+    flash("AI is rechecking the submission in the background - this page will update automatically when it's done.")
     return redirect(url_for("admin.submission_detail", submission_id=submission_id))
 
 

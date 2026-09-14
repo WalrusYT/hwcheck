@@ -34,8 +34,11 @@
     {% endfor %}
   </div>
 
+  {% set ai_pending = submission['ai_status'] == 'pending' %}
   <h2>AI review {% if show_form %}(draft — verify per task before publishing){% endif %}</h2>
-  {% if submission['ai_status'] == 'error' %}
+  {% if ai_pending %}
+    <p class="muted" id="ai-pending-msg">⏳ AI is grading this submission in the background — this page will update automatically when it's done.</p>
+  {% elif submission['ai_status'] == 'error' %}
     <div class="errors">AI grading failed: {{ submission['ai_error'] }}</div>
   {% elif not ai_result %}
     <p class="muted">Still processing…</p>
@@ -63,7 +66,9 @@
     <p class="badge badge-reviewed">Published to student</p>
   {% endif %}
 
-  {% if show_form %}
+  {% if show_form and ai_pending %}
+  <p class="muted">Waiting for the AI recheck to finish before you can edit feedback — this page will update automatically.</p>
+  {% elif show_form %}
   <form method="post" class="form">
     {% if problems %}
     <input type="hidden" name="problem_count" value="{{ problems|length }}">
@@ -158,4 +163,21 @@
     <button type="submit" class="button-danger">Delete submission</button>
   </form>
 </div>
+
+{% if ai_pending %}
+<script>
+  (function poll() {
+    fetch("{{ url_for('admin.submission_status', submission_id=submission['id']) }}")
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data.status === 'pending') {
+          setTimeout(poll, 3000);
+        } else {
+          window.location.reload();
+        }
+      })
+      .catch(function () { setTimeout(poll, 5000); });
+  })();
+</script>
+{% endif %}
 {% endblock %}

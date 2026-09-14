@@ -19,12 +19,12 @@ from flask import (
 from werkzeug.utils import secure_filename
 
 import db
+import grading_jobs
 import homework_chat
 import notifications
 import performance
 from auth import check_password, hash_password, password_error, student_required
 from config import ALLOWED_EXT, ASSIGNMENT_FILES_DIR, MAX_FILES, SUBMISSION_FILES_DIR
-from grading import GradingError, grade_submission
 from translations import t
 
 student_bp = Blueprint("student", __name__, url_prefix="/me")
@@ -188,24 +188,14 @@ def homework_detail(assignment_id):
                 link=url_for("admin.submission_detail", submission_id=submission_id),
             )
 
-            try:
-                result = grade_submission(
-                    [sub_dir / n for n in saved_names],
-                    student["name"],
-                    assignment["topic"],
-                    task_file_paths=task_file_paths,
-                )
-                conn.execute(
-                    "UPDATE student_submissions SET ai_result = ?, ai_status = 'done' WHERE id = ?",
-                    (json.dumps(result), submission_id),
-                )
-            except GradingError as exc:
-                conn.execute(
-                    "UPDATE student_submissions SET ai_status = 'error', ai_error = ? WHERE id = ?",
-                    (str(exc), submission_id),
-                )
-            conn.commit()
             conn.close()
+            grading_jobs.start_grading_job(
+                submission_id,
+                [sub_dir / n for n in saved_names],
+                student["name"],
+                assignment["topic"],
+                task_file_paths=task_file_paths,
+            )
             return redirect(url_for("student.homework_detail", assignment_id=assignment_id))
 
     submission = conn.execute(
