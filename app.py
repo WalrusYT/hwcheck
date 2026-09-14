@@ -68,6 +68,12 @@ def index():
     return redirect(url_for("student.login"))
 
 
+@app.route("/favicon.ico")
+def favicon():
+    # Browsers probe this legacy path regardless of our <link rel="icon"> tags.
+    return redirect(url_for("static", filename="favicon.png"))
+
+
 @app.errorhandler(413)
 def too_large(_exc):
     return render_template("error.html", message="Those files are too large (20 MB max total). Try smaller photos or fewer pages."), 413
@@ -76,6 +82,11 @@ def too_large(_exc):
 @app.errorhandler(404)
 def not_found(_exc):
     return render_template("error.html", message="Page not found."), 404
+
+
+@app.errorhandler(405)
+def method_not_allowed(_exc):
+    return render_template("error.html", message="That action can't be reached directly - go back and use the button/link for it instead."), 405
 
 
 if __name__ == "__main__":
