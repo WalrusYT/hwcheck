@@ -69,3 +69,25 @@ def generate_narrative(student_name, history, lang="en"):
         ],
     )
     return response.choices[0].message.content
+
+
+def refresh_narrative(conn, student_id):
+    """Regenerate and cache the student's performance narrative in their current language."""
+    student = conn.execute("SELECT * FROM students WHERE id = ?", (student_id,)).fetchone()
+    rows = conn.execute(
+        """SELECT ss.tutor_grade, ss.tutor_comment, ha.title AS assignment_title
+           FROM student_submissions ss
+           JOIN homework_assignments ha ON ha.id = ss.assignment_id
+           WHERE ss.student_id = ? AND ss.feedback_published = 1
+           ORDER BY ss.reviewed_at DESC LIMIT 15""",
+        (student_id,),
+    ).fetchall()
+    history = [{"title": r["assignment_title"], "grade": r["tutor_grade"], "comment": r["tutor_comment"]} for r in rows]
+    try:
+        narrative = generate_narrative(student["name"], history, lang=student["language"])
+    except Exception:
+        narrative = student["performance_narrative"]
+    conn.execute(
+        "UPDATE students SET performance_narrative = ?, performance_narrative_updated_at = datetime('now') WHERE id = ?",
+        (narrative, student_id),
+    )

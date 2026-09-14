@@ -71,7 +71,10 @@ def set_language(lang):
     session["lang"] = lang
     if session.get("student_id"):
         conn = db.get_db()
+        student = conn.execute("SELECT * FROM students WHERE id = ?", (session["student_id"],)).fetchone()
         conn.execute("UPDATE students SET language = ? WHERE id = ?", (lang, session["student_id"]))
+        if student["language"] != lang and student["performance_narrative"]:
+            performance.refresh_narrative(conn, session["student_id"])
         conn.commit()
         conn.close()
     return redirect(request.referrer or url_for("student.dashboard"))

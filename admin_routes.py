@@ -361,27 +361,6 @@ def student_performance_pdf(student_id):
     )
 
 
-def _refresh_narrative(conn, student_id):
-    student = conn.execute("SELECT * FROM students WHERE id = ?", (student_id,)).fetchone()
-    rows = conn.execute(
-        """SELECT ss.tutor_grade, ss.tutor_comment, ha.title AS assignment_title
-           FROM student_submissions ss
-           JOIN homework_assignments ha ON ha.id = ss.assignment_id
-           WHERE ss.student_id = ? AND ss.feedback_published = 1
-           ORDER BY ss.reviewed_at DESC LIMIT 15""",
-        (student_id,),
-    ).fetchall()
-    history = [{"title": r["assignment_title"], "grade": r["tutor_grade"], "comment": r["tutor_comment"]} for r in rows]
-    try:
-        narrative = performance.generate_narrative(student["name"], history, lang=student["language"])
-    except Exception:
-        narrative = student["performance_narrative"]
-    conn.execute(
-        "UPDATE students SET performance_narrative = ?, performance_narrative_updated_at = datetime('now') WHERE id = ?",
-        (narrative, student_id),
-    )
-
-
 # ---- Submission review ---------------------------------------------------
 
 @admin_bp.route("/submissions/<int:submission_id>", methods=["GET", "POST"])
@@ -430,7 +409,7 @@ def submission_detail(submission_id):
                     (grade, comment, submission_id),
                 )
                 conn.commit()
-                _refresh_narrative(conn, submission["student_id"])
+                performance.refresh_narrative(conn, submission["student_id"])
                 conn.commit()
                 if grade != previous_grade:
                     assignment_title = conn.execute(
