@@ -54,7 +54,12 @@
         <tr>
           <td><strong>{{ p['problem_label'] }}</strong><br><span class="muted">{{ p['problem_text'] }}</span></td>
           <td>{{ p['student_answer'] | wrap_math }}</td>
-          <td>{{ p['correct_answer'] | wrap_math }}</td>
+          <td>
+            <details class="spoiler">
+              <summary>{{ t('homework.reveal_answer') }}</summary>
+              <div class="spoiler-content">{{ p['correct_answer'] | wrap_math }}</div>
+            </details>
+          </td>
           <td><span class="badge badge-{{ p['verdict'] }}">{{ t('verdict.' + p['verdict']) }}</span></td>
           <td>{{ p['explanation'] or '—' }}</td>
         </tr>

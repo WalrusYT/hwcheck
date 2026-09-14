@@ -454,6 +454,37 @@ button, .button {
   }
 }
 
+.spoiler summary {
+  cursor: pointer;
+  list-style: none;
+  display: inline-block;
+  color: var(--accent);
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 4px 10px;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  white-space: nowrap;
+}
+
+.spoiler summary::-webkit-details-marker,
+.spoiler summary::marker {
+  display: none;
+  content: "";
+}
+
+.spoiler summary:hover {
+  border-color: var(--accent);
+}
+
+.spoiler[open] summary {
+  display: none;
+}
+
+.spoiler-content {
+  padding-top: 2px;
+}
+
 .table-wrap {
   overflow-x: auto;
 }
