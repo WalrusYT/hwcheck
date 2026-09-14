@@ -32,8 +32,12 @@
       <p>{{ submission['tutor_comment'] }}</p>
     {% endif %}
 
+    {% set issues = problems | rejectattr('verdict', 'equalto', 'correct') | list %}
     {% if problems %}
     <h2>{{ t('homework.review_title') }}</h2>
+    {% if not issues %}
+      <p>{{ t('homework.all_correct') }}</p>
+    {% else %}
     <div class="table-wrap">
     <table class="table">
       <thead>
@@ -46,7 +50,7 @@
         </tr>
       </thead>
       <tbody>
-        {% for p in problems %}
+        {% for p in issues %}
         <tr>
           <td><strong>{{ p['problem_label'] }}</strong><br><span class="muted">{{ p['problem_text'] }}</span></td>
           <td>{{ p['student_answer'] | wrap_math }}</td>
@@ -58,6 +62,7 @@
       </tbody>
     </table>
     </div>
+    {% endif %}
     {% endif %}
   {% else %}
 
