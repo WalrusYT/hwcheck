@@ -64,6 +64,7 @@ CREATE TABLE IF NOT EXISTS student_submissions (
     ai_error TEXT,
     tutor_grade TEXT,
     tutor_comment TEXT,
+    tutor_result TEXT,
     feedback_published INTEGER NOT NULL DEFAULT 0,
     submitted_at TEXT NOT NULL DEFAULT (datetime('now')),
     reviewed_at TEXT
@@ -111,5 +112,9 @@ def init_db():
     student_columns = {row["name"] for row in conn.execute("PRAGMA table_info(students)")}
     if "first_login_at" not in student_columns:
         conn.execute("ALTER TABLE students ADD COLUMN first_login_at TEXT")
+    # Migration for databases created before tutor_result existed.
+    submission_columns = {row["name"] for row in conn.execute("PRAGMA table_info(student_submissions)")}
+    if "tutor_result" not in submission_columns:
+        conn.execute("ALTER TABLE student_submissions ADD COLUMN tutor_result TEXT")
     conn.commit()
     conn.close()

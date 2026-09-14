@@ -1,13 +1,6 @@
-const MATH_DELIMITERS = [
-  { left: "$$", right: "$$", display: true },
-  { left: "\\[", right: "\\]", display: true },
-  { left: "\\(", right: "\\)", display: false },
-  { left: "$", right: "$", display: false },
-];
-
 function renderMathIn(el) {
   if (window.renderMathInElement) {
-    window.renderMathInElement(el, { delimiters: MATH_DELIMITERS, throwOnError: false });
+    window.renderMathInElement(el, { delimiters: window.MATH_DELIMITERS, throwOnError: false });
   }
 }
 

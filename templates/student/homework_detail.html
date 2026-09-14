@@ -3,7 +3,7 @@
 {% block content %}
 {% include "student/_nav.html" %}
 
-{% set published = submissions | selectattr('feedback_published') | list %}
+{% set published = submission and submission['feedback_published'] %}
 
 <div class="card wide">
   <a href="{{ url_for('student.homeworks') }}" class="muted">← {{ t('nav.homeworks') }}</a>
@@ -25,16 +25,43 @@
   {% endif %}
 
   {% if published %}
-    {% set latest = published[0] %}
     <h2>{{ t('homework.your_grade') }}</h2>
-    <p><span class="badge badge-reviewed">{{ latest['tutor_grade'] }}</span></p>
-    {% if latest['tutor_comment'] %}
+    <p><span class="badge badge-reviewed">{{ submission['tutor_grade'] }}</span></p>
+    {% if submission['tutor_comment'] %}
       <h2>{{ t('homework.tutor_comment') }}</h2>
-      <p>{{ latest['tutor_comment'] }}</p>
+      <p>{{ submission['tutor_comment'] }}</p>
     {% endif %}
-  {% endif %}
 
-  <h2>{{ t('homework.submit_title') }}</h2>
+    {% if problems %}
+    <h2>{{ t('homework.review_title') }}</h2>
+    <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>{{ t('homework.col_problem') }}</th>
+          <th>{{ t('homework.col_your_answer') }}</th>
+          <th>{{ t('homework.col_correct_answer') }}</th>
+          <th>{{ t('homework.col_verdict') }}</th>
+          <th>{{ t('homework.col_explanation') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in problems %}
+        <tr>
+          <td><strong>{{ p['problem_label'] }}</strong><br><span class="muted">{{ p['problem_text'] }}</span></td>
+          <td>{{ p['student_answer'] | wrap_math }}</td>
+          <td>{{ p['correct_answer'] | wrap_math }}</td>
+          <td><span class="badge badge-{{ p['verdict'] }}">{{ t('verdict.' + p['verdict']) }}</span></td>
+          <td>{{ p['explanation'] or '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    {% endif %}
+  {% else %}
+
+  <h2>{{ t('homework.edit_title') if submission else t('homework.submit_title') }}</h2>
   {% if errors %}
     <div class="errors">{% for e in errors %}<div>{{ e }}</div>{% endfor %}</div>
   {% endif %}
@@ -44,26 +71,16 @@
     <div class="form-row">
       <button type="button" id="add-files-btn" class="button-secondary">{{ t('homework.add_photos') }}</button>
     </div>
-    <button type="submit">{{ t('homework.submit') }}</button>
+    <button type="submit">{{ t('homework.edit_submit') if submission else t('homework.submit') }}</button>
   </form>
 
-  {% if submissions %}
-  <h2>{{ t('homework.previous_submissions') }}</h2>
-  <div class="table-wrap">
-  <table class="table">
-    <tbody>
-      {% for s in submissions %}
-      <tr>
-        <td>{{ s['submitted_at'] }}</td>
-        <td>
-          {% if s['feedback_published'] %}<span class="badge badge-reviewed">{{ t('homeworks.status.reviewed') }} - {{ s['tutor_grade'] }}</span>
-          {% else %}<span class="badge">{{ t('homework.submitted_status') }}</span>{% endif %}
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  </div>
+  {% if submission %}
+  <p class="muted">{{ t('homework.your_submission') }}: {{ submission['submitted_at'] }} — {{ t('homework.submitted_status') }}</p>
+  <form method="post" action="{{ url_for('student.remove_submission', assignment_id=assignment['id']) }}"
+        onsubmit="return confirm({{ t('homework.remove_confirm') | tojson }});" style="margin-top:10px">
+    <button type="submit" class="button button-secondary button-danger">{{ t('homework.remove_submission') }}</button>
+  </form>
+  {% endif %}
   {% endif %}
 </div>
 

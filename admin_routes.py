@@ -28,6 +28,7 @@ import translations
 import performance_pdf
 from auth import admin_required, hash_password, password_error
 from config import ALLOWED_EXT, ASSIGNMENT_FILES_DIR, MAX_FILES, SUBMISSION_FILES_DIR
+from grading import GradingError, grade_submission
 
 admin_bp = Blueprint("admin", __name__, url_prefix="/admin")
 
@@ -396,6 +397,25 @@ def submission_detail(submission_id):
         comment = request.form.get("tutor_comment", "")
         publish = request.form.get("action") == "publish"
 
+        problem_count = int(request.form.get("problem_count", 0) or 0)
+        if problem_count:
+            edited_problems = []
+            for i in range(problem_count):
+                edited_problems.append({
+                    "problem_label": request.form.get(f"problem_label_{i}", ""),
+                    "problem_text": request.form.get(f"problem_text_{i}", ""),
+                    "student_answer": request.form.get(f"student_answer_{i}", ""),
+                    "correct_answer": (request.form.get(f"correct_answer_{i}") or "").strip(),
+                    "verdict": request.form.get(f"verdict_{i}", "unclear"),
+                    "explanation": (request.form.get(f"explanation_{i}") or "").strip(),
+                    "confidence": request.form.get(f"confidence_{i}", ""),
+                })
+            conn.execute(
+                "UPDATE student_submissions SET tutor_result = ? WHERE id = ?",
+                (json.dumps(edited_problems), submission_id),
+            )
+            conn.commit()
+
         if publish and grade not in ("A", "B", "C", "D", "F"):
             flash("Pick a grade before publishing.")
         else:
@@ -444,6 +464,8 @@ def submission_detail(submission_id):
     files = json.loads(submission["files"] or "[]")
     task_files = json.loads(assignment["task_files"] or "[]") if assignment else []
     ai_result = json.loads(submission["ai_result"]) if submission["ai_result"] else None
+    tutor_result = json.loads(submission["tutor_result"]) if submission["tutor_result"] else None
+    problems = tutor_result if tutor_result is not None else (ai_result["problems"] if ai_result else [])
     show_form = not submission["feedback_published"] or request.args.get("edit") == "1"
 
     return render_template(
@@ -454,8 +476,60 @@ def submission_detail(submission_id):
         files=files,
         task_files=task_files,
         ai_result=ai_result,
+        problems=problems,
         show_form=show_form,
     )
+
+
+@admin_bp.route("/submissions/<int:submission_id>/regrade", methods=["POST"])
+@admin_required
+def regrade_submission(submission_id):
+    conn = db.get_db()
+    submission = conn.execute("SELECT * FROM student_submissions WHERE id = ?", (submission_id,)).fetchone()
+    if not submission:
+        conn.close()
+        abort(404)
+
+    tutor_note = (request.form.get("tutor_note") or "").strip()
+    if not tutor_note:
+        conn.close()
+        flash("Describe what the AI got wrong before asking it to recheck.")
+        return redirect(url_for("admin.submission_detail", submission_id=submission_id))
+
+    assignment = conn.execute(
+        "SELECT * FROM homework_assignments WHERE id = ?", (submission["assignment_id"],)
+    ).fetchone()
+    student = conn.execute("SELECT * FROM students WHERE id = ?", (submission["student_id"],)).fetchone()
+
+    files = json.loads(submission["files"] or "[]")
+    sub_dir = SUBMISSION_FILES_DIR / str(submission_id)
+    task_file_names = json.loads(assignment["task_files"] or "[]") if assignment else []
+    task_file_paths = [ASSIGNMENT_FILES_DIR / str(submission["assignment_id"]) / n for n in task_file_names]
+
+    try:
+        result = grade_submission(
+            [sub_dir / n for n in files],
+            student["name"],
+            assignment["topic"] if assignment else None,
+            task_file_paths=task_file_paths,
+            tutor_note=tutor_note,
+        )
+        conn.execute(
+            """UPDATE student_submissions
+               SET ai_result = ?, ai_status = 'done', ai_error = NULL, tutor_result = NULL
+               WHERE id = ?""",
+            (json.dumps(result), submission_id),
+        )
+        flash("AI rechecked the submission with your note - your previous table edits were reset, please review the new draft.")
+    except GradingError as exc:
+        conn.execute(
+            "UPDATE student_submissions SET ai_status = 'error', ai_error = ? WHERE id = ?",
+            (str(exc), submission_id),
+        )
+        flash("Recheck failed - see the error below.")
+    conn.commit()
+    conn.close()
+    return redirect(url_for("admin.submission_detail", submission_id=submission_id))
 
 
 # ---- Notifications ---------------------------------------------------------

@@ -34,41 +34,28 @@
     {% endfor %}
   </div>
 
-  <h2>AI review (draft — verify before publishing)</h2>
+  <h2>AI review {% if show_form %}(draft — verify per task before publishing){% endif %}</h2>
   {% if submission['ai_status'] == 'error' %}
     <div class="errors">AI grading failed: {{ submission['ai_error'] }}</div>
   {% elif not ai_result %}
     <p class="muted">Still processing…</p>
   {% else %}
-    <p>{{ ai_result['overall_summary'] }}</p>
-    <p><strong>Estimated score:</strong> {{ ai_result['estimated_score'] }}</p>
-
+    <p class="muted">{{ ai_result['overall_summary'] }} — <strong>{{ ai_result['estimated_score'] }}</strong></p>
     {% if ai_result['flags_for_tutor'] %}
       <div class="flags">
         <strong>Flags for you to double-check:</strong>
         <ul>{% for f in ai_result['flags_for_tutor'] %}<li>{{ f }}</li>{% endfor %}</ul>
       </div>
     {% endif %}
-
-    <div class="table-wrap">
-    <table class="table">
-      <thead>
-        <tr><th>Problem</th><th>Student answer</th><th>Correct answer</th><th>Verdict</th><th>Confidence</th><th>Explanation</th></tr>
-      </thead>
-      <tbody>
-        {% for p in ai_result['problems'] %}
-        <tr>
-          <td><strong>{{ p['problem_label'] }}</strong><br><span class="muted">{{ p['problem_text'] }}</span></td>
-          <td>{{ p['student_answer'] }}</td>
-          <td>{{ p['correct_answer'] }}</td>
-          <td><span class="badge badge-{{ p['verdict'] }}">{{ p['verdict'].replace('_', ' ') }}</span></td>
-          <td><span class="badge badge-conf-{{ p['confidence'] }}">{{ p['confidence'] }}</span></td>
-          <td>{{ p['explanation'] }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-    </div>
+    {% if show_form %}
+    <form method="post" action="{{ url_for('admin.regrade_submission', submission_id=submission['id']) }}" class="form">
+      <label>
+        Spotted a mistake in the AI's reading? Describe it and ask for a recheck
+        <textarea name="tutor_note" rows="2" placeholder="e.g. You misread interval A's upper bound as 0 - it's actually 3. Recheck all answers involving A."></textarea>
+      </label>
+      <button type="submit" class="button-secondary">Recheck with AI</button>
+    </form>
+    {% endif %}
   {% endif %}
 
   <h2>Grade &amp; feedback for the student</h2>
@@ -78,6 +65,45 @@
 
   {% if show_form %}
   <form method="post" class="form">
+    {% if problems %}
+    <input type="hidden" name="problem_count" value="{{ problems|length }}">
+    <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr><th>Problem</th><th>Student answer</th><th>Correct answer</th><th>Verdict</th><th>Confidence</th><th>Explanation</th></tr>
+      </thead>
+      <tbody>
+        {% for p in problems %}
+        <tr>
+          <td>
+            <strong>{{ p['problem_label'] }}</strong><br><span class="muted">{{ p['problem_text'] }}</span>
+            <input type="hidden" name="problem_label_{{ loop.index0 }}" value="{{ p['problem_label'] }}">
+            <input type="hidden" name="problem_text_{{ loop.index0 }}" value="{{ p['problem_text'] }}">
+          </td>
+          <td>
+            {{ p['student_answer'] | wrap_math }}
+            <input type="hidden" name="student_answer_{{ loop.index0 }}" value="{{ p['student_answer'] }}">
+          </td>
+          <td><input type="text" name="correct_answer_{{ loop.index0 }}" value="{{ p['correct_answer'] }}"></td>
+          <td>
+            <select name="verdict_{{ loop.index0 }}">
+              {% for v in ['correct', 'incorrect', 'partially_correct', 'unclear'] %}
+                <option value="{{ v }}" {{ 'selected' if p['verdict'] == v else '' }}>{{ v.replace('_', ' ') }}</option>
+              {% endfor %}
+            </select>
+          </td>
+          <td>
+            <span class="badge badge-conf-{{ p['confidence'] }}">{{ p['confidence'] }}</span>
+            <input type="hidden" name="confidence_{{ loop.index0 }}" value="{{ p['confidence'] }}">
+          </td>
+          <td><textarea name="explanation_{{ loop.index0 }}" rows="2">{{ p['explanation'] }}</textarea></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    {% endif %}
+
     <label>
       Grade
       <select name="grade">
@@ -94,6 +120,26 @@
     </div>
   </form>
   {% else %}
+  {% if problems %}
+  <div class="table-wrap">
+  <table class="table">
+    <thead>
+      <tr><th>Problem</th><th>Student answer</th><th>Correct answer</th><th>Verdict</th><th>Explanation</th></tr>
+    </thead>
+    <tbody>
+      {% for p in problems %}
+      <tr>
+        <td><strong>{{ p['problem_label'] }}</strong><br><span class="muted">{{ p['problem_text'] }}</span></td>
+        <td>{{ p['student_answer'] | wrap_math }}</td>
+        <td>{{ p['correct_answer'] | wrap_math }}</td>
+        <td><span class="badge badge-{{ p['verdict'] }}">{{ p['verdict'].replace('_', ' ') }}</span></td>
+        <td>{{ p['explanation'] or '—' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% endif %}
   <p><span class="badge badge-{{ submission['tutor_grade'] }}">{{ submission['tutor_grade'] }}</span></p>
   {% if submission['tutor_comment'] %}
     <p>{{ submission['tutor_comment'] }}</p>

@@ -21,6 +21,27 @@ app.config["MAX_CONTENT_LENGTH"] = 20 * 1024 * 1024  # 20 MB per request
 app.jinja_env.filters["fromjson"] = json.loads
 app.jinja_env.globals["t"] = t
 
+
+def wrap_math(value):
+    """Wrap a short math-only string (never prose) in LaTeX inline delimiters
+    for KaTeX rendering, unless it's already delimited. The AI grader is
+    inconsistent about adding \\( \\) itself in these fields, but they're
+    always pure expressions, so it's safe to always wrap them here."""
+    if not value:
+        return value
+    stripped = value.strip()
+    already_wrapped = (
+        (stripped.startswith("\\(") and stripped.endswith("\\)"))
+        or (stripped.startswith("\\[") and stripped.endswith("\\]"))
+        or (stripped.startswith("$") and stripped.endswith("$") and len(stripped) > 1)
+    )
+    if already_wrapped:
+        return value
+    return f"\\({value}\\)"
+
+
+app.jinja_env.filters["wrap_math"] = wrap_math
+
 db.init_db()
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 ASSIGNMENT_FILES_DIR.mkdir(parents=True, exist_ok=True)

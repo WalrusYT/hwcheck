@@ -1,11 +1,13 @@
 """Student-facing portal: login, dashboard, homework list/detail/submit, hint chat, performance."""
 
 import json
+import shutil
 from pathlib import Path
 
 from flask import (
     Blueprint,
     abort,
+    flash,
     jsonify,
     redirect,
     render_template,
@@ -122,8 +124,17 @@ def homework_detail(assignment_id):
         conn.close()
         abort(404)
 
+    existing = conn.execute(
+        "SELECT * FROM student_submissions WHERE assignment_id = ? AND student_id = ?",
+        (assignment_id, session["student_id"]),
+    ).fetchone()
+
     errors = []
     if request.method == "POST":
+        if existing and existing["feedback_published"]:
+            conn.close()
+            abort(403)
+
         files = [f for f in request.files.getlist("files") if f and f.filename]
         if not files:
             errors.append(t("homework.no_files_error"))
@@ -134,12 +145,25 @@ def homework_detail(assignment_id):
                 errors.append(t("homework.bad_file_type", filename=f.filename))
 
         if not errors:
-            cur = conn.execute(
-                "INSERT INTO student_submissions (assignment_id, student_id) VALUES (?, ?)",
-                (assignment_id, session["student_id"]),
-            )
-            submission_id = cur.lastrowid
-            conn.commit()
+            if existing:
+                submission_id = existing["id"]
+                shutil.rmtree(SUBMISSION_FILES_DIR / str(submission_id), ignore_errors=True)
+                conn.execute(
+                    """UPDATE student_submissions
+                       SET files = '[]', ai_result = NULL, ai_status = 'pending', ai_error = NULL,
+                           tutor_grade = NULL, tutor_comment = NULL, tutor_result = NULL,
+                           submitted_at = datetime('now')
+                       WHERE id = ?""",
+                    (submission_id,),
+                )
+                conn.commit()
+            else:
+                cur = conn.execute(
+                    "INSERT INTO student_submissions (assignment_id, student_id) VALUES (?, ?)",
+                    (assignment_id, session["student_id"]),
+                )
+                submission_id = cur.lastrowid
+                conn.commit()
 
             sub_dir = SUBMISSION_FILES_DIR / str(submission_id)
             sub_dir.mkdir(parents=True, exist_ok=True)
@@ -184,10 +208,10 @@ def homework_detail(assignment_id):
             conn.close()
             return redirect(url_for("student.homework_detail", assignment_id=assignment_id))
 
-    submissions = conn.execute(
-        "SELECT * FROM student_submissions WHERE assignment_id = ? AND student_id = ? ORDER BY submitted_at DESC",
+    submission = conn.execute(
+        "SELECT * FROM student_submissions WHERE assignment_id = ? AND student_id = ?",
         (assignment_id, session["student_id"]),
-    ).fetchall()
+    ).fetchone()
     chat_rows = conn.execute(
         "SELECT role, content FROM hint_chat_messages WHERE assignment_id = ? AND student_id = ? ORDER BY id ASC",
         (assignment_id, session["student_id"]),
@@ -195,15 +219,43 @@ def homework_detail(assignment_id):
     conn.close()
 
     task_files = json.loads(assignment["task_files"] or "[]")
+    ai_result = json.loads(submission["ai_result"]) if submission and submission["ai_result"] else None
+    tutor_result = json.loads(submission["tutor_result"]) if submission and submission["tutor_result"] else None
+    problems = tutor_result if tutor_result is not None else (ai_result["problems"] if ai_result else [])
 
     return render_template(
         "student/homework_detail.html",
         assignment=assignment,
-        submissions=submissions,
+        submission=submission,
+        problems=problems,
         task_files=task_files,
         chat_history=[dict(r) for r in chat_rows],
         errors=errors,
     )
+
+
+@student_bp.route("/homeworks/<int:assignment_id>/remove", methods=["POST"])
+@student_required
+def remove_submission(assignment_id):
+    conn = db.get_db()
+    submission = conn.execute(
+        "SELECT * FROM student_submissions WHERE assignment_id = ? AND student_id = ?",
+        (assignment_id, session["student_id"]),
+    ).fetchone()
+    if not submission:
+        conn.close()
+        abort(404)
+    if submission["feedback_published"]:
+        conn.close()
+        abort(403)
+
+    submission_id = submission["id"]
+    conn.execute("DELETE FROM student_submissions WHERE id = ?", (submission_id,))
+    conn.commit()
+    conn.close()
+    shutil.rmtree(SUBMISSION_FILES_DIR / str(submission_id), ignore_errors=True)
+    flash(t("homework.removed"))
+    return redirect(url_for("student.homework_detail", assignment_id=assignment_id))
 
 
 @student_bp.route("/homeworks/<int:assignment_id>/chat", methods=["POST"])
