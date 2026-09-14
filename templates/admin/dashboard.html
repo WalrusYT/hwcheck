@@ -18,6 +18,7 @@
         <th>Submitted</th>
         <th>AI result</th>
         <th></th>
+        <th></th>
       </tr>
     </thead>
     <tbody>
@@ -35,7 +36,13 @@
           {% elif s['ai_status'] == 'error' %}<span class="badge badge-error">Error</span>
           {% else %}<span class="badge">Pending</span>{% endif %}
         </td>
-        <td><a href="{{ url_for('admin.submission_detail', submission_id=s['id']) }}">View →</a></td>
+        <td><a href="{{ url_for('admin.submission_detail', submission_id=s['id']) }}" class="button button-secondary button-accent">View →</a></td>
+        <td>
+          <form method="post" action="{{ url_for('admin.delete_submission', submission_id=s['id']) }}"
+                onsubmit="return confirm('Delete this submission? This cannot be undone.');">
+            <button type="submit" class="button button-secondary button-danger">Delete</button>
+          </form>
+        </td>
       </tr>
       {% endfor %}
     </tbody>

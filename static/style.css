@@ -183,7 +183,17 @@ button, .button {
   border: 1px solid var(--border);
 }
 
+.button-danger {
+  background: var(--bad);
+  color: #fff;
+}
+
+.button-danger:hover {
+  background: #9a1d10;
+}
+
 .button-secondary.button-danger {
+  background: var(--panel);
   color: var(--bad);
   border-color: var(--bad);
 }

@@ -149,4 +149,13 @@
   <a href="{{ url_for('admin.submission_detail', submission_id=submission['id'], edit=1) }}" class="button button-secondary button-accent">Edit feedback</a>
   {% endif %}
 </div>
+
+<div class="card wide">
+  <h2>Danger zone</h2>
+  <p class="muted">Permanently deletes this submission and its uploaded files. This cannot be undone.</p>
+  <form method="post" action="{{ url_for('admin.delete_submission', submission_id=submission['id']) }}"
+        onsubmit="return confirm('Delete this submission? This cannot be undone.');">
+    <button type="submit" class="button-danger">Delete submission</button>
+  </form>
+</div>
 {% endblock %}

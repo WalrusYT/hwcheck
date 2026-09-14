@@ -481,6 +481,22 @@ def submission_detail(submission_id):
     )
 
 
+@admin_bp.route("/submissions/<int:submission_id>/delete", methods=["POST"])
+@admin_required
+def delete_submission(submission_id):
+    conn = db.get_db()
+    submission = conn.execute("SELECT * FROM student_submissions WHERE id = ?", (submission_id,)).fetchone()
+    if not submission:
+        conn.close()
+        abort(404)
+    conn.execute("DELETE FROM student_submissions WHERE id = ?", (submission_id,))
+    conn.commit()
+    conn.close()
+    shutil.rmtree(SUBMISSION_FILES_DIR / str(submission_id), ignore_errors=True)
+    flash("Submission deleted.")
+    return redirect(url_for("admin.dashboard"))
+
+
 @admin_bp.route("/submissions/<int:submission_id>/regrade", methods=["POST"])
 @admin_required
 def regrade_submission(submission_id):
