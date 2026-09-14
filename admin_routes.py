@@ -518,10 +518,17 @@ def regrade_submission(submission_id):
         conn.close()
         abort(404)
 
-    tutor_note = (request.form.get("tutor_note") or "").strip()
+    problem_count = int(request.form.get("problem_count", 0) or 0)
+    notes = []
+    for i in range(problem_count):
+        note = (request.form.get(f"ai_note_{i}") or "").strip()
+        if note:
+            label = request.form.get(f"problem_label_{i}") or f"#{i + 1}"
+            notes.append(f"Problem {label}: {note}")
+    tutor_note = "\n".join(notes)
     if not tutor_note:
         conn.close()
-        flash("Describe what the AI got wrong before asking it to recheck.")
+        flash("Add a note on at least one task before asking for a recheck.")
         return redirect(url_for("admin.submission_detail", submission_id=submission_id))
 
     assignment = conn.execute(

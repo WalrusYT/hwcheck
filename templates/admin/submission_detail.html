@@ -50,14 +50,8 @@
         <ul>{% for f in ai_result['flags_for_tutor'] %}<li>{{ f }}</li>{% endfor %}</ul>
       </div>
     {% endif %}
-    {% if show_form %}
-    <form method="post" action="{{ url_for('admin.regrade_submission', submission_id=submission['id']) }}" class="form">
-      <label>
-        Spotted a mistake in the AI's reading? Describe it and ask for a recheck
-        <textarea name="tutor_note" rows="2" placeholder="e.g. You misread interval A's upper bound as 0 - it's actually 3. Recheck all answers involving A."></textarea>
-      </label>
-      <button type="submit" class="button-secondary">Recheck with AI</button>
-    </form>
+    {% if show_form and problems %}
+    <p class="hint">Spotted a mistake? Add a note in the "Note for AI" column on the task(s) below, then click "Recheck flagged tasks with AI".</p>
     {% endif %}
   {% endif %}
 
@@ -75,7 +69,7 @@
     <div class="table-wrap">
     <table class="table">
       <thead>
-        <tr><th>Problem</th><th>Student answer</th><th>Correct answer</th><th>Verdict</th><th>Confidence</th><th>Explanation</th></tr>
+        <tr><th>Problem</th><th>Student answer</th><th>Correct answer</th><th>Verdict</th><th>Confidence</th><th>Explanation</th><th>Note for AI</th></tr>
       </thead>
       <tbody>
         {% for p in problems %}
@@ -102,10 +96,14 @@
             <input type="hidden" name="confidence_{{ loop.index0 }}" value="{{ p['confidence'] }}">
           </td>
           <td><textarea name="explanation_{{ loop.index0 }}" rows="2">{{ p['explanation'] }}</textarea></td>
+          <td><textarea name="ai_note_{{ loop.index0 }}" rows="2" placeholder="e.g. -1 is greater than -√3, this order is wrong"></textarea></td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
+    </div>
+    <div class="form-row">
+      <button type="submit" formaction="{{ url_for('admin.regrade_submission', submission_id=submission['id']) }}" class="button-secondary">Recheck flagged tasks with AI</button>
     </div>
     {% endif %}
 

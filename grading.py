@@ -179,12 +179,13 @@ def grade_submission(file_paths, student_name, topic=None, task_file_paths=None,
             "type": "text",
             "text": (
                 "IMPORTANT - this is a re-check. A tutor already reviewed a previous "
-                "AI grading attempt on this exact submission and found a mistake. "
-                f"Their note:\n\"{tutor_note}\"\n"
+                "AI grading attempt on this exact submission and left one or more "
+                "corrections below, each pointing at a specific problem by its label:\n"
+                f"{tutor_note}\n"
                 "Re-read the images from scratch, paying close attention to the "
-                "specific issue described above, and re-check every problem (not "
-                "just the one mentioned) in case the same kind of misreading "
-                "affected other answers too."
+                "specific problems and issues described above, and re-check every "
+                "problem (not just the ones mentioned) in case the same kind of "
+                "misreading affected other answers too."
             ),
         })
 
