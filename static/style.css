@@ -371,6 +371,89 @@ button, .button {
 .notif-time { font-size: 0.72rem; }
 .notif-empty { padding: 12px 6px; }
 
+.problem-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 16px 0;
+}
+
+.problem-card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+}
+
+.problem-card-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.problem-card-head select {
+  width: auto;
+  font: inherit;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+}
+
+.problem-card-text {
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin: 0 0 12px;
+}
+
+.problem-card-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.problem-card-field {
+  margin-bottom: 12px;
+}
+
+.problem-card-row .problem-card-field {
+  margin-bottom: 0;
+}
+
+.problem-card-field:last-child {
+  margin-bottom: 0;
+}
+
+.problem-card-field label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
+.problem-card-field input[type="text"],
+.problem-card-field textarea {
+  width: 100%;
+}
+
+.problem-card-readonly {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  min-height: 20px;
+}
+
+@media (max-width: 640px) {
+  .problem-card-row {
+    grid-template-columns: 1fr;
+  }
+}
+
 .table-wrap {
   overflow-x: auto;
 }
