@@ -29,7 +29,7 @@ import performance
 import translations
 import performance_pdf
 from auth import admin_required, hash_password, password_error
-from config import ALLOWED_EXT, ASSIGNMENT_FILES_DIR, MAX_FILES, SUBMISSION_FILES_DIR
+from config import ALLOWED_EXT, ASSIGNMENT_FILES_DIR, MAX_FILES, SOLUTION_FILES_DIR, SUBMISSION_FILES_DIR
 
 admin_bp = Blueprint("admin", __name__, url_prefix="/admin")
 
@@ -185,6 +185,7 @@ def _delete_student_cascade(conn, student_id):
 
     for assignment_id in assignment_ids:
         shutil.rmtree(ASSIGNMENT_FILES_DIR / str(assignment_id), ignore_errors=True)
+        shutil.rmtree(SOLUTION_FILES_DIR / str(assignment_id), ignore_errors=True)
     for submission_id in submission_ids:
         shutil.rmtree(SUBMISSION_FILES_DIR / str(submission_id), ignore_errors=True)
 
@@ -216,11 +217,12 @@ def create_assignment(student_id):
     title = (request.form.get("title") or "").strip()
     topic = (request.form.get("topic") or "").strip()
     task_files = [f for f in request.files.getlist("task_files") if f and f.filename]
+    solution_files = [f for f in request.files.getlist("solution_files") if f and f.filename]
 
     errors = []
     if not title:
         errors.append("Title is required.")
-    for f in task_files:
+    for f in task_files + solution_files:
         if Path(f.filename).suffix.lower() not in ALLOWED_EXT:
             errors.append(f"Unsupported file type: {f.filename}.")
 
@@ -248,6 +250,21 @@ def create_assignment(student_id):
             saved_names.append(dest.name)
         conn.execute(
             "UPDATE homework_assignments SET task_files = ? WHERE id = ?",
+            (json.dumps(saved_names), assignment_id),
+        )
+        conn.commit()
+
+    if solution_files:
+        solution_dir = SOLUTION_FILES_DIR / str(assignment_id)
+        solution_dir.mkdir(parents=True, exist_ok=True)
+        saved_names = []
+        for i, f in enumerate(solution_files):
+            safe = secure_filename(f.filename) or f"file_{i}"
+            dest = solution_dir / f"{i:02d}_{safe}"
+            f.save(dest)
+            saved_names.append(dest.name)
+        conn.execute(
+            "UPDATE homework_assignments SET solution_files = ? WHERE id = ?",
             (json.dumps(saved_names), assignment_id),
         )
         conn.commit()
@@ -280,6 +297,7 @@ def _delete_assignment_cascade(conn, assignment_id):
     for submission_id in submission_ids:
         shutil.rmtree(SUBMISSION_FILES_DIR / str(submission_id), ignore_errors=True)
     shutil.rmtree(ASSIGNMENT_FILES_DIR / str(assignment_id), ignore_errors=True)
+    shutil.rmtree(SOLUTION_FILES_DIR / str(assignment_id), ignore_errors=True)
 
 
 @admin_bp.route("/assignments/<int:assignment_id>/delete", methods=["POST"])
@@ -498,6 +516,8 @@ def _start_grading(conn, submission, tutor_note=None, reset_tutor_result=False):
     sub_dir = SUBMISSION_FILES_DIR / str(submission["id"])
     task_file_names = json.loads(assignment["task_files"] or "[]") if assignment else []
     task_file_paths = [ASSIGNMENT_FILES_DIR / str(submission["assignment_id"]) / n for n in task_file_names]
+    solution_file_names = json.loads(assignment["solution_files"] or "[]") if assignment else []
+    solution_file_paths = [SOLUTION_FILES_DIR / str(submission["assignment_id"]) / n for n in solution_file_names]
 
     conn.execute("UPDATE student_submissions SET ai_status = 'pending', ai_error = NULL WHERE id = ?", (submission["id"],))
     conn.commit()
@@ -508,6 +528,7 @@ def _start_grading(conn, submission, tutor_note=None, reset_tutor_result=False):
         student["name"],
         assignment["topic"] if assignment else None,
         task_file_paths=task_file_paths,
+        solution_file_paths=solution_file_paths,
         tutor_note=tutor_note,
         reset_tutor_result=reset_tutor_result,
     )
@@ -585,6 +606,12 @@ def notifications_mark_all_read():
 @admin_required
 def assignment_file(assignment_id, filename):
     return send_from_directory(ASSIGNMENT_FILES_DIR / str(assignment_id), filename)
+
+
+@admin_bp.route("/assignment-solutions/<int:assignment_id>/<path:filename>")
+@admin_required
+def assignment_solution_file(assignment_id, filename):
+    return send_from_directory(SOLUTION_FILES_DIR / str(assignment_id), filename)
 
 
 @admin_bp.route("/submission-files/<int:submission_id>/<path:filename>")

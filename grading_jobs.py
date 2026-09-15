@@ -11,12 +11,14 @@ from grading import GradingError, grade_submission
 
 
 def start_grading_job(submission_id, file_paths, student_name, topic=None,
-                       task_file_paths=None, tutor_note=None, reset_tutor_result=False):
+                       task_file_paths=None, solution_file_paths=None,
+                       tutor_note=None, reset_tutor_result=False):
     def run():
         try:
             result = grade_submission(
                 file_paths, student_name, topic,
-                task_file_paths=task_file_paths, tutor_note=tutor_note,
+                task_file_paths=task_file_paths, solution_file_paths=solution_file_paths,
+                tutor_note=tutor_note,
             )
             conn = db.get_db()
             if reset_tutor_result:

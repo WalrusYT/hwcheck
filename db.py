@@ -51,6 +51,7 @@ CREATE TABLE IF NOT EXISTS homework_assignments (
     title TEXT NOT NULL,
     topic TEXT,
     task_files TEXT NOT NULL DEFAULT '[]',
+    solution_files TEXT NOT NULL DEFAULT '[]',
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -116,5 +117,9 @@ def init_db():
     submission_columns = {row["name"] for row in conn.execute("PRAGMA table_info(student_submissions)")}
     if "tutor_result" not in submission_columns:
         conn.execute("ALTER TABLE student_submissions ADD COLUMN tutor_result TEXT")
+    # Migration for databases created before solution_files existed.
+    assignment_columns = {row["name"] for row in conn.execute("PRAGMA table_info(homework_assignments)")}
+    if "solution_files" not in assignment_columns:
+        conn.execute("ALTER TABLE homework_assignments ADD COLUMN solution_files TEXT NOT NULL DEFAULT '[]'")
     conn.commit()
     conn.close()

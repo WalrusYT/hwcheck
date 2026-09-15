@@ -50,7 +50,11 @@
     </div>
     <label>
       Homework sheet <span class="muted">(optional but recommended - photo/PDF of the problems)</span>
-      <input type="file" name="task_files" accept="image/*,.pdf" multiple>
+      <input type="file" name="task_files" accept="image/*,.heic,.heif,.pdf" multiple>
+    </label>
+    <label>
+      Solutions / answer key <span class="muted">(optional - only shown to the AI, never to the student, so it can grade against the real answers instead of solving from scratch)</span>
+      <input type="file" name="solution_files" accept="image/*,.heic,.heif,.pdf" multiple>
     </label>
     <button type="submit">Create assignment</button>
   </form>
@@ -63,7 +67,7 @@
   {% else %}
   <div class="table-wrap">
   <table class="table">
-    <thead><tr><th>Title</th><th>Topic</th><th>Files</th><th>Created</th><th></th></tr></thead>
+    <thead><tr><th>Title</th><th>Topic</th><th>Files</th><th>Solutions</th><th>Created</th><th></th></tr></thead>
     <tbody>
       {% for a in assignments %}
       <tr>
@@ -72,6 +76,11 @@
         <td>
           {% set task_count = (a['task_files'] | fromjson | length) %}
           {% if task_count %}<span class="badge badge-done">{{ task_count }} file{{ 's' if task_count != 1 else '' }}</span>
+          {% else %}<span class="muted">none</span>{% endif %}
+        </td>
+        <td>
+          {% set solution_count = (a['solution_files'] | fromjson | length) %}
+          {% if solution_count %}<span class="badge badge-done">{{ solution_count }} file{{ 's' if solution_count != 1 else '' }}</span>
           {% else %}<span class="muted">none</span>{% endif %}
         </td>
         <td>{{ a['created_at'] }}</td>

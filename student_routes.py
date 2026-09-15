@@ -24,7 +24,7 @@ import homework_chat
 import notifications
 import performance
 from auth import check_password, hash_password, password_error, student_required
-from config import ALLOWED_EXT, ASSIGNMENT_FILES_DIR, MAX_FILES, SUBMISSION_FILES_DIR
+from config import ALLOWED_EXT, ASSIGNMENT_FILES_DIR, MAX_FILES, SOLUTION_FILES_DIR, SUBMISSION_FILES_DIR
 from translations import t
 
 student_bp = Blueprint("student", __name__, url_prefix="/me")
@@ -184,6 +184,8 @@ def homework_detail(assignment_id):
             student = conn.execute("SELECT * FROM students WHERE id = ?", (session["student_id"],)).fetchone()
             task_file_names = json.loads(assignment["task_files"] or "[]")
             task_file_paths = [ASSIGNMENT_FILES_DIR / str(assignment_id) / n for n in task_file_names]
+            solution_file_names = json.loads(assignment["solution_files"] or "[]")
+            solution_file_paths = [SOLUTION_FILES_DIR / str(assignment_id) / n for n in solution_file_names]
 
             notifications.notify_admin(
                 "submission",
@@ -198,6 +200,7 @@ def homework_detail(assignment_id):
                 student["name"],
                 assignment["topic"],
                 task_file_paths=task_file_paths,
+                solution_file_paths=solution_file_paths,
             )
             return redirect(url_for("student.homework_detail", assignment_id=assignment_id))
 
@@ -378,11 +381,11 @@ def notifications_mark_all_read():
 def task_file(assignment_id, filename):
     conn = db.get_db()
     assignment = conn.execute(
-        "SELECT id FROM homework_assignments WHERE id = ? AND student_id = ?",
+        "SELECT id, task_files FROM homework_assignments WHERE id = ? AND student_id = ?",
         (assignment_id, session["student_id"]),
     ).fetchone()
     conn.close()
-    if not assignment:
+    if not assignment or filename not in json.loads(assignment["task_files"] or "[]"):
         abort(404)
     return send_from_directory(ASSIGNMENT_FILES_DIR / str(assignment_id), filename)
 

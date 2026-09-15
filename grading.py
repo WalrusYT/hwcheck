@@ -17,9 +17,17 @@ MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o")
 SYSTEM_PROMPT = """\
 You are an experienced math tutor reviewing a student's homework submission \
 for another tutor, who will double-check your work before it reaches the \
-student. You will be shown images labeled as one or both of:
+student. You will be shown images labeled as one or more of:
 - "Assigned homework" - the original problem sheet the tutor gave the \
 student. Treat this as the authoritative list of problems, if present.
+- "Tutor's solutions" - the tutor's own worked answers/answer key for this \
+assignment (not the student's work). When present, use these as the \
+ground truth for each correct_answer instead of solving the problem \
+yourself from scratch - but still sanity-check each one, and note in \
+flags_for_tutor if a provided solution looks wrong or doesn't match the \
+problem statement. Still independently judge the student's own shown work \
+for verdict and explanation - a correct final answer with a broken method \
+is still "partially_correct", regardless of what the answer key says.
 - "Student submission" - the student's photographed/scanned answers. This \
 may or may not also include the printed problem text alongside their work.
 
@@ -155,10 +163,14 @@ class GradingError(Exception):
     pass
 
 
-def grade_submission(file_paths, student_name, topic=None, task_file_paths=None, tutor_note=None):
+def grade_submission(file_paths, student_name, topic=None, task_file_paths=None,
+                      solution_file_paths=None, tutor_note=None):
     """file_paths: list of pathlib.Path to the student's uploaded files.
     task_file_paths: optional list of pathlib.Path to the tutor's uploaded
     homework/problem sheet, if one was attached when the code was created.
+    solution_file_paths: optional list of pathlib.Path to the tutor's own
+    worked solutions/answer key for this assignment, if one was attached -
+    used as ground truth so the AI doesn't have to solve from scratch.
     tutor_note: optional string - a tutor's correction on a previous grading
     attempt of this same submission (e.g. "you misread interval A's upper
     bound as 0, it's actually 3"), used to prompt a careful re-check.
@@ -202,6 +214,11 @@ def grade_submission(file_paths, student_name, topic=None, task_file_paths=None,
 
     if task_file_paths:
         append_labeled_pages("Assigned homework (the problem sheet the tutor gave the student)", task_file_paths)
+
+    if solution_file_paths:
+        append_labeled_pages(
+            "Tutor's solutions (ground truth answer key - not the student's work)", solution_file_paths
+        )
 
     append_labeled_pages("Student submission (grade this)", file_paths)
 
