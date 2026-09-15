@@ -488,6 +488,31 @@ def delete_submission(submission_id):
     return redirect(url_for("admin.dashboard"))
 
 
+def _start_grading(conn, submission, tutor_note=None, reset_tutor_result=False):
+    assignment = conn.execute(
+        "SELECT * FROM homework_assignments WHERE id = ?", (submission["assignment_id"],)
+    ).fetchone()
+    student = conn.execute("SELECT * FROM students WHERE id = ?", (submission["student_id"],)).fetchone()
+
+    files = json.loads(submission["files"] or "[]")
+    sub_dir = SUBMISSION_FILES_DIR / str(submission["id"])
+    task_file_names = json.loads(assignment["task_files"] or "[]") if assignment else []
+    task_file_paths = [ASSIGNMENT_FILES_DIR / str(submission["assignment_id"]) / n for n in task_file_names]
+
+    conn.execute("UPDATE student_submissions SET ai_status = 'pending', ai_error = NULL WHERE id = ?", (submission["id"],))
+    conn.commit()
+
+    grading_jobs.start_grading_job(
+        submission["id"],
+        [sub_dir / n for n in files],
+        student["name"],
+        assignment["topic"] if assignment else None,
+        task_file_paths=task_file_paths,
+        tutor_note=tutor_note,
+        reset_tutor_result=reset_tutor_result,
+    )
+
+
 @admin_bp.route("/submissions/<int:submission_id>/regrade", methods=["POST"])
 @admin_required
 def regrade_submission(submission_id):
@@ -510,32 +535,24 @@ def regrade_submission(submission_id):
         flash("Add a note on at least one task before asking for a recheck.")
         return redirect(url_for("admin.submission_detail", submission_id=submission_id))
 
-    assignment = conn.execute(
-        "SELECT * FROM homework_assignments WHERE id = ?", (submission["assignment_id"],)
-    ).fetchone()
-    student = conn.execute("SELECT * FROM students WHERE id = ?", (submission["student_id"],)).fetchone()
-
-    files = json.loads(submission["files"] or "[]")
-    sub_dir = SUBMISSION_FILES_DIR / str(submission_id)
-    task_file_names = json.loads(assignment["task_files"] or "[]") if assignment else []
-    task_file_paths = [ASSIGNMENT_FILES_DIR / str(submission["assignment_id"]) / n for n in task_file_names]
-    student_name = student["name"]
-    topic = assignment["topic"] if assignment else None
-
-    conn.execute("UPDATE student_submissions SET ai_status = 'pending', ai_error = NULL WHERE id = ?", (submission_id,))
-    conn.commit()
+    _start_grading(conn, submission, tutor_note=tutor_note, reset_tutor_result=True)
     conn.close()
-
-    grading_jobs.start_grading_job(
-        submission_id,
-        [sub_dir / n for n in files],
-        student_name,
-        topic,
-        task_file_paths=task_file_paths,
-        tutor_note=tutor_note,
-        reset_tutor_result=True,
-    )
     flash("AI is rechecking the submission in the background - this page will update automatically when it's done.")
+    return redirect(url_for("admin.submission_detail", submission_id=submission_id))
+
+
+@admin_bp.route("/submissions/<int:submission_id>/retry", methods=["POST"])
+@admin_required
+def retry_grading(submission_id):
+    conn = db.get_db()
+    submission = conn.execute("SELECT * FROM student_submissions WHERE id = ?", (submission_id,)).fetchone()
+    if not submission:
+        conn.close()
+        abort(404)
+
+    _start_grading(conn, submission)
+    conn.close()
+    flash("Retrying AI grading in the background - this page will update automatically when it's done.")
     return redirect(url_for("admin.submission_detail", submission_id=submission_id))
 
 

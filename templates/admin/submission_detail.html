@@ -40,6 +40,9 @@
     <p class="muted" id="ai-pending-msg">⏳ AI is grading this submission in the background — this page will update automatically when it's done.</p>
   {% elif submission['ai_status'] == 'error' %}
     <div class="errors">AI grading failed: {{ submission['ai_error'] }}</div>
+    <form method="post" action="{{ url_for('admin.retry_grading', submission_id=submission['id']) }}" style="margin-top:10px">
+      <button type="submit" class="button-secondary">Retry AI grading</button>
+    </form>
   {% elif not ai_result %}
     <p class="muted">Still processing…</p>
   {% else %}

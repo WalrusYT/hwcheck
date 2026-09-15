@@ -43,6 +43,20 @@ def wrap_math(value):
 app.jinja_env.filters["wrap_math"] = wrap_math
 
 db.init_db()
+
+# A submission's AI grading runs on a background thread (grading_jobs.py); if the
+# process restarts mid-grade (crash, OOM, deploy) that thread dies with it, leaving
+# the row stuck on "pending" with no background job left to ever finish it. Surface
+# that as a retryable error instead of an infinite spinner.
+_startup_conn = db.get_db()
+_startup_conn.execute(
+    "UPDATE student_submissions SET ai_status = 'error', "
+    "ai_error = 'Grading was interrupted by a server restart. Click Retry AI grading below.' "
+    "WHERE ai_status = 'pending'"
+)
+_startup_conn.commit()
+_startup_conn.close()
+
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 ASSIGNMENT_FILES_DIR.mkdir(parents=True, exist_ok=True)
 SUBMISSION_FILES_DIR.mkdir(parents=True, exist_ok=True)
