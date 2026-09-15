@@ -635,6 +635,32 @@ button, .button {
   font: inherit;
 }
 
+.chat-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.chat-task-row {
+  display: flex;
+  gap: 8px;
+}
+
+.chat-task-row input[type="text"] {
+  flex: 1;
+  padding: 9px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  font: inherit;
+  min-width: 0;
+}
+
+button:disabled, .button-secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 @media (max-width: 640px) {
   .form-row { grid-template-columns: 1fr; }
 }

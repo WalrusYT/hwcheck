@@ -218,6 +218,7 @@ def homework_detail(assignment_id):
     ai_result = json.loads(submission["ai_result"]) if submission and submission["ai_result"] else None
     tutor_result = json.loads(submission["tutor_result"]) if submission and submission["tutor_result"] else None
     problems = tutor_result if tutor_result is not None else (ai_result["problems"] if ai_result else [])
+    hints_used = sum(1 for r in chat_rows if r["role"] == "user")
 
     return render_template(
         "student/homework_detail.html",
@@ -226,6 +227,8 @@ def homework_detail(assignment_id):
         problems=problems,
         task_files=task_files,
         chat_history=[dict(r) for r in chat_rows],
+        hint_remaining=max(0, homework_chat.HINT_LIMIT - hints_used),
+        hint_limit=homework_chat.HINT_LIMIT,
         errors=errors,
     )
 
@@ -266,19 +269,28 @@ def homework_chat_endpoint(assignment_id):
         conn.close()
         abort(404)
 
-    message = ((request.get_json(silent=True) or {}).get("message") or "").strip()
-    if not message:
-        conn.close()
-        return jsonify({"error": "Empty message"}), 400
-
     rows = conn.execute(
         "SELECT role, content FROM hint_chat_messages WHERE assignment_id = ? AND student_id = ? ORDER BY id ASC",
         (assignment_id, session["student_id"]),
     ).fetchall()
+    hints_used = sum(1 for r in rows if r["role"] == "user")
+    if hints_used >= homework_chat.HINT_LIMIT:
+        conn.close()
+        return jsonify({"error": t("chat.limit_reached")}), 403
+
+    student = conn.execute("SELECT * FROM students WHERE id = ?", (session["student_id"],)).fetchone()
+    data = request.get_json(silent=True) or {}
+    try:
+        message = homework_chat.build_user_message(
+            data.get("action"), data.get("task_number"), lang=student["language"]
+        )
+    except ValueError:
+        conn.close()
+        return jsonify({"error": "Invalid request"}), 400
+
     history = [dict(r) for r in rows]
     history.append({"role": "user", "content": message})
 
-    student = conn.execute("SELECT * FROM students WHERE id = ?", (session["student_id"],)).fetchone()
     task_file_names = json.loads(assignment["task_files"] or "[]")
     task_file_paths = [ASSIGNMENT_FILES_DIR / str(assignment_id) / n for n in task_file_names]
 
@@ -301,7 +313,11 @@ def homework_chat_endpoint(assignment_id):
     conn.commit()
     conn.close()
 
-    return jsonify({"reply": reply_text})
+    return jsonify({
+        "reply": reply_text,
+        "message": message,
+        "remaining": homework_chat.HINT_LIMIT - (hints_used + 1),
+    })
 
 
 @student_bp.route("/performance")

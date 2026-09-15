@@ -106,10 +106,15 @@
       {% endfor %}
     {% endif %}
   </div>
-  <form id="chat-form" class="composer">
-    <textarea id="chat-input" rows="1" placeholder="{{ t('chat.placeholder') }}"></textarea>
-    <button type="submit">{{ t('chat.send') }}</button>
-  </form>
+  <p class="hint" id="chat-coins">{{ t('chat.coins_left', n=hint_remaining, total=hint_limit) }}</p>
+  <div class="chat-actions" id="chat-actions" {{ 'hidden' if hint_remaining <= 0 }}>
+    <button type="button" id="chat-theory-btn" class="button-secondary">{{ t('chat.theory_button') }}</button>
+    <div class="chat-task-row">
+      <input type="text" id="chat-task-number" maxlength="20" placeholder="{{ t('chat.task_number_placeholder') }}">
+      <button type="button" id="chat-task-btn" class="button-secondary">{{ t('chat.task_help_button') }}</button>
+    </div>
+  </div>
+  <p class="muted" id="chat-limit-msg" {{ 'hidden' if hint_remaining > 0 }}>{{ t('chat.limit_reached') }}</p>
 </div>
 {% endif %}
 
@@ -120,7 +125,19 @@
 <script>
   initUploadWidget("file-input", "file-thumbs", "add-files-btn");
   {% if not published %}
-  initHomeworkChat("chat-card", "chat-messages", "chat-form", "chat-input");
+  initHomeworkChat({
+    cardId: "chat-card",
+    messagesId: "chat-messages",
+    theoryBtnId: "chat-theory-btn",
+    taskBtnId: "chat-task-btn",
+    taskInputId: "chat-task-number",
+    actionsId: "chat-actions",
+    coinsId: "chat-coins",
+    limitMsgId: "chat-limit-msg",
+    coinsTemplate: {{ t('chat.coins_left') | tojson }},
+    hintLimit: {{ hint_limit }},
+    taskNumberRequired: {{ t('chat.task_number_required') | tojson }},
+  });
   {% endif %}
 </script>
 {% endblock %}

@@ -15,6 +15,28 @@ from image_utils import file_to_image_data_urls
 MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o")
 HISTORY_LIMIT = 20
 
+# Per-assignment cap on how many hint requests a student can make - the chat
+# isn't free-form (see build_user_message below), so each request is one of
+# a small set of fixed actions, and each one costs one "coin."
+HINT_LIMIT = 3
+
+ACTION_PROMPTS = {
+    "theory": {
+        "en": "Please remind me the key theory and concepts I need for this assignment.",
+        "ru": "Пожалуйста, напомни мне ключевую теорию и понятия, нужные для этого задания.",
+    },
+    "task_help": {
+        "en": (
+            "Please help me with task {task_number} - explain what it's asking "
+            "and give me a hint on how to start, without giving away the final answer."
+        ),
+        "ru": (
+            "Пожалуйста, помоги мне с заданием {task_number} - объясни, что там "
+            "нужно сделать, и дай подсказку, с чего начать, не называя итоговый ответ."
+        ),
+    },
+}
+
 SYSTEM_PROMPT = {
     "en": (
         "You are a friendly math tutoring assistant helping a student with one "
@@ -63,6 +85,21 @@ SYSTEM_PROMPT = {
 
 class ChatError(Exception):
     pass
+
+
+def build_user_message(action, task_number, lang="en"):
+    """Turns a button press into the actual message sent to the model - the
+    student picks from a fixed menu rather than typing free text, so there's
+    a small, known set of possible questions rather than an open chat."""
+    if action not in ACTION_PROMPTS:
+        raise ValueError(f"Unknown action: {action}")
+    template = ACTION_PROMPTS[action].get(lang, ACTION_PROMPTS[action]["en"])
+    if action == "task_help":
+        task_number = (task_number or "").strip()[:20]
+        if not task_number:
+            raise ValueError("task_number is required for task_help")
+        return template.format(task_number=task_number)
+    return template
 
 
 def reply(task_file_paths, history, lang="en"):

@@ -4,14 +4,19 @@ function renderMathIn(el) {
   }
 }
 
-function initHomeworkChat(cardId, messagesId, formId, inputId) {
-  const card = document.getElementById(cardId);
-  const messagesEl = document.getElementById(messagesId);
-  const formEl = document.getElementById(formId);
-  const inputEl = document.getElementById(inputId);
-  if (!card || !formEl) return;
+function initHomeworkChat(opts) {
+  const card = document.getElementById(opts.cardId);
+  const messagesEl = document.getElementById(opts.messagesId);
+  const theoryBtn = document.getElementById(opts.theoryBtnId);
+  const taskBtn = document.getElementById(opts.taskBtnId);
+  const taskInput = document.getElementById(opts.taskInputId);
+  const actionsEl = document.getElementById(opts.actionsId);
+  const coinsEl = document.getElementById(opts.coinsId);
+  const limitMsgEl = document.getElementById(opts.limitMsgId);
+  if (!card || !theoryBtn || !taskBtn) return;
 
   const chatUrl = card.dataset.chatUrl;
+  let remaining = opts.hintLimit;
 
   function addBubble(role, text) {
     const wrap = document.createElement("div");
@@ -34,40 +39,76 @@ function initHomeworkChat(cardId, messagesId, formId, inputId) {
     document.addEventListener("DOMContentLoaded", () => renderMathIn(messagesEl));
   }
 
-  inputEl.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      formEl.requestSubmit();
+  function setBusy(busy) {
+    theoryBtn.disabled = busy;
+    taskBtn.disabled = busy;
+    taskInput.disabled = busy;
+  }
+
+  function updateCoins() {
+    if (coinsEl) {
+      coinsEl.textContent = opts.coinsTemplate
+        .replace("{n}", remaining)
+        .replace("{total}", opts.hintLimit);
     }
-  });
+    if (remaining <= 0) {
+      actionsEl.hidden = true;
+      if (limitMsgEl) limitMsgEl.hidden = false;
+    }
+  }
 
-  formEl.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const message = inputEl.value.trim();
-    if (!message) return;
-
-    addBubble("user", message);
-    inputEl.value = "";
-
+  async function sendAction(payload, userText) {
+    setBusy(true);
+    addBubble("user", userText);
     const typing = addBubble("bot typing", "…");
 
     try {
       const res = await fetch(chatUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       typing.remove();
 
       if (!res.ok) {
         addBubble("bot error", data.error || "Something went wrong.");
+        if (res.status === 403) {
+          remaining = 0;
+          updateCoins();
+        }
         return;
       }
       addBubble("bot", data.reply);
+      remaining = data.remaining;
+      updateCoins();
     } catch (err) {
       typing.remove();
       addBubble("bot error", "Could not reach the server.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  theoryBtn.addEventListener("click", () => {
+    sendAction({ action: "theory" }, theoryBtn.textContent.trim());
+  });
+
+  taskBtn.addEventListener("click", () => {
+    const taskNumber = taskInput.value.trim();
+    if (!taskNumber) {
+      taskInput.focus();
+      addBubble("bot error", opts.taskNumberRequired);
+      return;
+    }
+    sendAction({ action: "task_help", task_number: taskNumber }, `${taskBtn.textContent.trim()}: ${taskNumber}`);
+    taskInput.value = "";
+  });
+
+  taskInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      taskBtn.click();
     }
   });
 }
