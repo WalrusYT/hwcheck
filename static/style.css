@@ -215,6 +215,7 @@ button, .button {
   display: inline-flex;
   align-items: center;
   gap: 10px;
+  text-decoration: none;
 }
 
 .logo-mark { flex-shrink: 0; }
