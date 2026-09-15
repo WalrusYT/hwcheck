@@ -1,8 +1,15 @@
 """Shared helper for turning uploaded images/PDFs into base64 data URLs for vision requests."""
 
 import base64
+import io
 
+import pillow_heif
 import pymupdf as fitz
+from PIL import Image
+
+pillow_heif.register_heif_opener()
+
+HEIC_EXTS = {".heic", ".heif"}
 
 # Cap on the longest edge of any image we send to the vision API, in pixels.
 # 200 DPI on a normal A4/letter page comes out well under this, so ordinary
@@ -37,6 +44,17 @@ def file_to_image_data_urls(file_path):
                 urls.append(f"data:image/png;base64,{b64}")
         finally:
             doc.close()
+    elif ext in HEIC_EXTS:
+        # iPhones save photos as HEIC by default - MuPDF can't decode it, so
+        # this goes through Pillow (+ pillow-heif) instead and comes out as a
+        # normal JPEG the vision API and the rest of this pipeline can read.
+        img = Image.open(file_path).convert("RGB")
+        if max(img.size) > MAX_DIM:
+            img.thumbnail((MAX_DIM, MAX_DIM), Image.LANCZOS)
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=90)
+        b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
+        urls.append(f"data:image/jpeg;base64,{b64}")
     else:
         # Real photo dimensions can't lie about content size the way a PDF's
         # declared page size can, so this is a cheap safety net rather than

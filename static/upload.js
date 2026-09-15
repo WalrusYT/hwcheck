@@ -6,21 +6,32 @@ function initUploadWidget(inputId, thumbsId, addBtnId) {
 
   let files = [];
 
+  function fileLabel(name) {
+    const label = document.createElement("span");
+    label.className = "thumb-file";
+    label.textContent = "📄 " + name;
+    return label;
+  }
+
   function render() {
     thumbs.innerHTML = "";
     files.forEach((file, idx) => {
       const item = document.createElement("div");
       item.className = "thumb";
 
-      if (file.type.startsWith("image/")) {
+      const isHeic = /\.(heic|heif)$/i.test(file.name);
+      if (file.type.startsWith("image/") && !isHeic) {
         const img = document.createElement("img");
         img.src = URL.createObjectURL(file);
+        // Most browsers (Safari being the exception) can't decode HEIC for
+        // an <img>, even though they can upload the file fine - fall back
+        // to the file-name label instead of a broken image icon.
+        img.onerror = () => {
+          img.replaceWith(fileLabel(file.name));
+        };
         item.appendChild(img);
       } else {
-        const label = document.createElement("span");
-        label.className = "thumb-file";
-        label.textContent = "📄 " + file.name;
-        item.appendChild(label);
+        item.appendChild(fileLabel(file.name));
       }
 
       const removeBtn = document.createElement("button");
