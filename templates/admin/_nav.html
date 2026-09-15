@@ -1,5 +1,5 @@
 <nav class="admin-nav">
-  <strong>TutorIlya Homework</strong>
+  {% include "admin/_logo.html" %}
   <a href="{{ url_for('admin.dashboard') }}">Submissions</a>
   <a href="{{ url_for('admin.students') }}">Students</a>
   <div class="right nav-cluster">

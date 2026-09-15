@@ -221,11 +221,22 @@ button, .button {
 .logo-mark { flex-shrink: 0; }
 
 .logo-text {
-  font-size: 1.02rem;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+
+.logo-text strong {
+  font-size: 1.05rem;
+  font-weight: 700;
   color: var(--text);
 }
 
-.logo-text strong { color: var(--accent); }
+.logo-sub {
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--muted);
+}
 
 .login-logo {
   display: flex;
@@ -233,7 +244,9 @@ button, .button {
   margin-bottom: 18px;
 }
 
-.login-logo .logo-text { font-size: 1.15rem; }
+.login-logo .logo-mark { width: 46px; height: 46px; }
+.login-logo .logo-text strong { font-size: 1.3rem; }
+.login-logo .logo-sub { font-size: 0.85rem; }
 
 .section-title {
   display: flex;
