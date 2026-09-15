@@ -12,6 +12,9 @@ FONT_DIR = Path(__file__).parent / "static" / "fonts"
 FONT_REGULAR = "notosans"
 FONT_BOLD = "notosans-bold"
 
+LOGO_PATH = Path(__file__).parent / "static" / "logo" / "logo_report.png"
+LOGO_HEIGHT = 34
+
 
 def _new_page(doc):
     """Create a page with our Cyrillic-capable font registered as a resource
@@ -30,8 +33,11 @@ def build_performance_pdf(student_name, average_letter, average_gpa, history, na
     page = _new_page(doc)
     y = MARGIN
 
-    page.insert_text((MARGIN, y), "Performance Report", fontsize=20, fontname=FONT_BOLD)
-    y += 26
+    logo_pix = fitz.Pixmap(str(LOGO_PATH))
+    logo_w = LOGO_HEIGHT * logo_pix.width / logo_pix.height
+    page.insert_image(fitz.Rect(MARGIN, y, MARGIN + logo_w, y + LOGO_HEIGHT), filename=str(LOGO_PATH))
+    y += LOGO_HEIGHT + 24
+
     page.insert_text((MARGIN, y), student_name, fontsize=14, fontname=FONT_BOLD)
     y += 18
     generated = datetime.now(timezone.utc).strftime("%Y-%m-%d")
