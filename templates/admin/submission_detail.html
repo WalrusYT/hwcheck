@@ -74,7 +74,6 @@
       <div class="problem-card">
         <input type="hidden" name="problem_label_{{ loop.index0 }}" value="{{ p['problem_label'] }}">
         <input type="hidden" name="problem_text_{{ loop.index0 }}" value="{{ p['problem_text'] }}">
-        <input type="hidden" name="student_answer_{{ loop.index0 }}" value="{{ p['student_answer'] }}">
         <input type="hidden" name="confidence_{{ loop.index0 }}" value="{{ p['confidence'] }}">
         <div class="problem-card-head">
           <strong>{{ p['problem_label'] }}</strong>
@@ -89,7 +88,7 @@
         <div class="problem-card-row">
           <div class="problem-card-field">
             <label>Student answer</label>
-            <div class="problem-card-readonly">{{ p['student_answer'] | wrap_math }}</div>
+            <textarea name="student_answer_{{ loop.index0 }}" rows="2">{{ p['student_answer'] }}</textarea>
           </div>
           <div class="problem-card-field">
             <label>Correct answer</label>
