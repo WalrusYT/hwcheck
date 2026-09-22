@@ -5,8 +5,17 @@
 
 <div class="card wide">
   <h1>Submissions</h1>
+  <div class="tabs">
+    <a href="{{ url_for('admin.dashboard', status='new') }}" class="tab {{ 'tab-active' if status == 'new' }}">New ({{ new_count }})</a>
+    <a href="{{ url_for('admin.dashboard', status='graded') }}" class="tab {{ 'tab-active' if status == 'graded' }}">Graded ({{ graded_count }})</a>
+    <a href="{{ url_for('admin.dashboard', status='all') }}" class="tab {{ 'tab-active' if status == 'all' }}">All ({{ new_count + graded_count }})</a>
+  </div>
   {% if not submissions %}
-    <p class="muted">No submissions yet.</p>
+    <p class="muted">
+      {% if status == 'new' %}No new submissions.
+      {% elif status == 'graded' %}No graded submissions yet.
+      {% else %}No submissions yet.{% endif %}
+    </p>
   {% else %}
   <div class="table-wrap">
   <table class="table">

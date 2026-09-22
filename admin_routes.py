@@ -63,16 +63,35 @@ def admin_logout():
 @admin_bp.route("")
 @admin_required
 def dashboard():
+    status = request.args.get("status", "new")
+    if status not in ("new", "graded", "all"):
+        status = "new"
+
+    where = ""
+    if status == "new":
+        where = "WHERE ss.feedback_published = 0"
+    elif status == "graded":
+        where = "WHERE ss.feedback_published = 1"
+
     conn = db.get_db()
     submissions = conn.execute(
-        """SELECT ss.*, s.name AS student_name, ha.title AS assignment_title
+        f"""SELECT ss.*, s.name AS student_name, ha.title AS assignment_title
            FROM student_submissions ss
            JOIN students s ON s.id = ss.student_id
            JOIN homework_assignments ha ON ha.id = ss.assignment_id
+           {where}
            ORDER BY ss.submitted_at DESC LIMIT 200"""
     ).fetchall()
+    new_count = conn.execute("SELECT COUNT(*) AS c FROM student_submissions WHERE feedback_published = 0").fetchone()["c"]
+    graded_count = conn.execute("SELECT COUNT(*) AS c FROM student_submissions WHERE feedback_published = 1").fetchone()["c"]
     conn.close()
-    return render_template("admin/dashboard.html", submissions=submissions)
+    return render_template(
+        "admin/dashboard.html",
+        submissions=submissions,
+        status=status,
+        new_count=new_count,
+        graded_count=graded_count,
+    )
 
 
 # ---- Students --------------------------------------------------------------
