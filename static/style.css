@@ -514,6 +514,7 @@ button, .button {
 .badge-incorrect { background: var(--bad-bg); color: var(--bad); }
 .badge-partially_correct { background: var(--warn-bg); color: var(--warn); }
 .badge-unclear { background: #f0f0f3; color: var(--muted); }
+.badge-not_attempted { background: #f0f0f3; color: var(--muted); }
 
 .badge-conf-high { background: var(--good-bg); color: var(--good); }
 .badge-conf-medium { background: var(--warn-bg); color: var(--warn); }

@@ -79,7 +79,7 @@
           <strong>{{ p['problem_label'] }}</strong>
           <span class="badge badge-conf-{{ p['confidence'] }}">{{ p['confidence'] }} confidence</span>
           <select name="verdict_{{ loop.index0 }}">
-            {% for v in ['correct', 'incorrect', 'partially_correct', 'unclear'] %}
+            {% for v in ['correct', 'incorrect', 'partially_correct', 'unclear', 'not_attempted'] %}
               <option value="{{ v }}" {{ 'selected' if p['verdict'] == v else '' }}>{{ v.replace('_', ' ') }}</option>
             {% endfor %}
           </select>

@@ -49,6 +49,30 @@ with all information about it merged into that single entry. Never output
 the same problem_label twice. If only a student submission is given, work
 from whatever problem text appears there.
 
+When a problem has multiple lettered or numbered sub-parts (e.g. a question
+"1.2" printed with sub-items a) b) c) d)... on the assigned sheet), treat
+EACH sub-part as its own separate entry in "problems" (labeled e.g. "1.2a",
+"1.2b", ...) - do not collapse them into one entry, and do not silently stop
+at whichever sub-part the student happened to answer last. If the assigned
+sheet shows 8 sub-parts and the student's work only covers the first two,
+your output must still contain all 8 entries - the missing six are real
+information for the tutor (see "not_attempted" below), not something to
+quietly omit because they'd make the list longer.
+
+NEVER FABRICATE A STUDENT ANSWER. If you cannot find a student's answer to
+a problem or sub-part anywhere in the submission images - it was skipped,
+cut off, or the page is missing - set student_answer to an empty string and
+verdict to "not_attempted". Do this even when the assigned sheet or your own
+solution makes it obvious what the "expected" answer would be - it is never
+acceptable to write down the correct answer (or anything else you did not
+actually read off the student's own work) as if the student wrote it, and
+it is never acceptable to mark a problem "correct" because you assume the
+student would have gotten it right. student_answer must always be a
+faithful transcription of what is actually visible in the student's
+handwriting - if it is genuinely ambiguous, transcribe your best reading
+and use "unclear" with low confidence, rather than silently resolving the
+ambiguity toward whatever answer happens to be correct.
+
 Empty sets: when an interval or set operation (e.g. an intersection with no
 overlap) has no solution, the answer is the empty set - write it as
 \\(\\emptyset\\) (or "empty set"), never as a reversed-order interval like
@@ -74,15 +98,21 @@ For every problem you can actually see:
 - Solve it yourself, independently, step by step.
 - Compare your solution to the student's answer and shown work.
 - Give a verdict: "correct", "incorrect", "partially_correct" (right idea/
-  method but a slip, or correct answer with missing steps), or "unclear"
-  (you cannot confidently read the problem or the student's work).
+  method but a slip, or correct answer with missing steps), "unclear" (the
+  student attempted it but the handwriting or notation is too ambiguous to
+  confidently read), or "not_attempted" (no student work for this problem
+  exists anywhere in the images at all - see above, and never use this as a
+  substitute for actually looking).
 - If the verdict is "correct", leave explanation as an empty string - no
-  need to explain a correct answer. For any other verdict ("incorrect",
+  need to explain a correct answer. For "not_attempted", leave explanation
+  as an empty string too. For any other verdict ("incorrect",
   "partially_correct", "unclear"), explain briefly why, in a way the tutor
   can quickly verify and forward to the student - mention the specific step
   where the student went wrong, if any.
 - Rate your own confidence as "high", "medium", or "low". Use "low" whenever
-  handwriting, notation, or a cropped/blurry image makes you unsure.
+  handwriting, notation, or a cropped/blurry image makes you unsure. Use
+  "high" for "not_attempted" only when you are certain the problem is
+  genuinely absent, not just hard to find.
 
 Do not invent problems that are not visible in the images. If the images
 contain no readable math problems at all, return an empty problems list and
@@ -118,11 +148,11 @@ RESULT_SCHEMA = {
                         "correct_answer": {"type": "string"},
                         "verdict": {
                             "type": "string",
-                            "enum": ["correct", "incorrect", "partially_correct", "unclear"],
+                            "enum": ["correct", "incorrect", "partially_correct", "unclear", "not_attempted"],
                         },
                         "explanation": {
                             "type": "string",
-                            "description": "Empty string if verdict is 'correct'. Otherwise a brief explanation of the mistake.",
+                            "description": "Empty string if verdict is 'correct' or 'not_attempted'. Otherwise a brief explanation of the mistake.",
                         },
                         "confidence": {"type": "string", "enum": ["high", "medium", "low"]},
                     },
