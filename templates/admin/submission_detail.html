@@ -95,6 +95,13 @@
             <textarea name="correct_answer_{{ loop.index0 }}" rows="2">{{ p['correct_answer'] }}</textarea>
           </div>
         </div>
+        {% if p['work'] %}
+        <input type="hidden" name="work_{{ loop.index0 }}" value="{{ p['work'] }}">
+        <details class="spoiler">
+          <summary>Show AI's work</summary>
+          <div class="spoiler-content problem-card-work">{{ p['work'] }}</div>
+        </details>
+        {% endif %}
         <div class="problem-card-field">
           <label>Explanation</label>
           <textarea name="explanation_{{ loop.index0 }}" rows="2">{{ p['explanation'] }}</textarea>

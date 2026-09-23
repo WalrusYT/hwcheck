@@ -422,6 +422,7 @@ def submission_detail(submission_id):
                     "problem_label": request.form.get(f"problem_label_{i}", ""),
                     "problem_text": request.form.get(f"problem_text_{i}", ""),
                     "student_answer": (request.form.get(f"student_answer_{i}") or "").strip(),
+                    "work": request.form.get(f"work_{i}", ""),
                     "correct_answer": (request.form.get(f"correct_answer_{i}") or "").strip(),
                     "verdict": request.form.get(f"verdict_{i}", "unclear"),
                     "explanation": (request.form.get(f"explanation_{i}") or "").strip(),

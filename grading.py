@@ -89,8 +89,9 @@ the same convenient value - if you catch yourself about to write identical
 placeholders into both fields, that is a sign you have not actually solved
 the problem. Multi-step algebraic simplifications (e.g. combining several
 rational expressions) are exactly the kind of problem where it is tempting
-to shortcut this way - do the full step-by-step algebra instead. If, after
-real effort, you still cannot confidently determine the correct answer
+to shortcut this way - use the "work" field below to actually do the
+step-by-step algebra instead of shortcutting to a guess. If, after showing
+real work, you still cannot confidently determine the correct answer
 yourself, write your best partial attempt (not a placeholder) into
 correct_answer, set verdict to "unclear" and confidence to "low", and add a
 note in flags_for_tutor asking the tutor to verify that specific problem by
@@ -119,7 +120,17 @@ For every problem you can actually see:
   flags_for_tutor, and lower confidence - do not silently guess and report
   high confidence.
 - Restate the problem briefly (after the careful transcription above).
-- Solve it yourself, independently, step by step.
+- Solve it yourself in "work" - actually write out each algebraic step (common
+  denominator, expansion, cancellation, sign flips, etc.), not just a final
+  answer. This is exactly the kind of multi-step rational-expression algebra
+  where jumping straight to a final answer produces confidently wrong results
+  - e.g. silently writing "0" for a problem that doesn't simplify to 0, or
+  copying the student's own expression into correct_answer instead of
+  independently deriving it. Do the arithmetic out in full before you commit
+  to correct_answer, and double-check each step (a wrong sign when flipping
+  4-x to -(x-4), or a dropped cross-term when expanding a square, is exactly
+  the kind of slip that produces a plausible-looking wrong answer).
+- Copy only the final simplified result from "work" into correct_answer.
 - Compare your solution to the student's answer and shown work.
 - Give a verdict: "correct", "incorrect", "partially_correct" (right idea/
   method but a slip, or correct answer with missing steps), "unclear" (the
@@ -157,10 +168,11 @@ different problem) is confusing and undermines the tutor's trust even when
 every individual verdict is itself correct.
 
 Formatting: whenever you write mathematical notation anywhere in your output
-(problem_text, student_answer, correct_answer, explanation, overall_summary)
-- fractions, exponents, roots, plus-minus, etc. - wrap it in inline LaTeX
-delimiters like \\(x = \\frac{1}{2}\\), so it can be rendered. Plain
-expressions with no special notation (e.g. "x = 5") don't need delimiters.
+(problem_text, student_answer, work, correct_answer, explanation,
+overall_summary) - fractions, exponents, roots, plus-minus, etc. - wrap it
+in inline LaTeX delimiters like \\(x = \\frac{1}{2}\\), so it can be
+rendered. Plain expressions with no special notation (e.g. "x = 5") don't
+need delimiters.
 """
 
 RESULT_SCHEMA = {
@@ -176,6 +188,14 @@ RESULT_SCHEMA = {
                         "problem_label": {"type": "string", "description": "e.g. 'Q1' or '3b'"},
                         "problem_text": {"type": "string"},
                         "student_answer": {"type": "string"},
+                        "work": {
+                            "type": "string",
+                            "description": (
+                                "Your own full step-by-step derivation of the answer (combine "
+                                "denominators, expand, cancel, etc.) - written out BEFORE "
+                                "correct_answer, not after. Tutor-only, never shown to the student."
+                            ),
+                        },
                         "correct_answer": {"type": "string"},
                         "verdict": {
                             "type": "string",
@@ -191,6 +211,7 @@ RESULT_SCHEMA = {
                         "problem_label",
                         "problem_text",
                         "student_answer",
+                        "work",
                         "correct_answer",
                         "verdict",
                         "explanation",
