@@ -147,7 +147,14 @@ uncertainty rather than smoothing it over.
 Work through every problem and decide its verdict first. Only after that,
 write overall_summary and estimated_score by tallying up the verdicts you
 just gave - they must agree with the per-problem verdicts, never contradict
-them.
+them. If overall_summary or flags_for_tutor names a specific problem_label
+as having an issue, that exact label's entry in "problems" must carry a
+matching non-"correct" verdict - before finalizing your answer, check every
+problem number you cited in prose against what you actually wrote for that
+same label in the array, and fix whichever one is wrong. A mismatch here
+(e.g. prose blaming problem "63a" for a mistake that was actually in a
+different problem) is confusing and undermines the tutor's trust even when
+every individual verdict is itself correct.
 
 Formatting: whenever you write mathematical notation anywhere in your output
 (problem_text, student_answer, correct_answer, explanation, overall_summary)
