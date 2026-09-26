@@ -1,0 +1,39 @@
+# Runs on every push and pull request. Render deploys main only after this
+# passes (render.yaml: autoDeployTrigger: checksPass), so a red run = no deploy.
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version-file: .python-version   # same Python as Render
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Lint (undefined names, unused imports, syntax errors)
+        run: ruff check --select F --output-format github .
+
+      - name: Tests
+        run: python -m pytest -q

@@ -108,6 +108,18 @@ def index():
     return redirect(url_for("student.login"))
 
 
+@app.route("/healthz")
+def healthz():
+    # Render's health check (render.yaml): a deploy only counts as healthy once the
+    # app is up AND can read the database on the persistent disk.
+    conn = db.get_db()
+    try:
+        conn.execute("SELECT 1 FROM students LIMIT 1").fetchall()
+    finally:
+        conn.close()
+    return "ok"
+
+
 @app.route("/favicon.ico")
 def favicon():
     # Browsers probe this legacy path regardless of our <link rel="icon"> tags.

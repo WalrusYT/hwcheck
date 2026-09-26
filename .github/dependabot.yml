@@ -1,0 +1,17 @@
+# Opens pull requests to bump pinned dependencies; CI runs on each one, and
+# nothing reaches production until you merge it.
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      python-minor-and-patch:
+        update-types: [minor, patch]
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly

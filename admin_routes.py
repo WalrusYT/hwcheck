@@ -41,7 +41,6 @@ from config import (
     ALLOWED_EXT,
     ASSIGNMENT_FILES_DIR,
     CURRICULA,
-    MAX_FILES,
     SOLUTION_FILES_DIR,
     SUBMISSION_FILES_DIR,
 )

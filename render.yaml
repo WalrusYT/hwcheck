@@ -7,6 +7,9 @@ services:
     # One worker on purpose: AI grading runs on in-process threads, and the
     # startup sweep in app.py assumes no other worker owns a pending job.
     startCommand: gunicorn app:app --workers 1 --timeout 120
+    # Deploy a push to main only after GitHub Actions CI is green.
+    autoDeployTrigger: checksPass
+    healthCheckPath: /healthz
     disk:
       name: hwcheck-data
       mountPath: /var/data

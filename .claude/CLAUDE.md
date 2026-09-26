@@ -10,6 +10,7 @@ default: read the existing code, make the smallest coherent change, verify it.
 ```
 python app.py                          # local server on http://localhost:5050 (needs .env)
 python -m pytest -q                    # full test suite, no network, ~15 s
+ruff check --select F .                # same lint as CI
 python -m pytest tests/test_grading.py -q
 python evals/run_grading_eval.py --runs 3 --label <name>   # real OpenAI calls, costs money
 ```
@@ -20,7 +21,11 @@ python evals/run_grading_eval.py --runs 3 --label <name>   # real OpenAI calls, 
 
 ## Deploy = push to `main`
 
-Render auto-deploys every push to `main` straight to production (`render.yaml`).
+Every push runs GitHub Actions CI (`.github/workflows/ci.yml`: `ruff check
+--select F` + pytest on the Python in `.python-version`). Render deploys a push
+to `main` to production once CI is green (`autoDeployTrigger: checksPass`) and
+checks `/healthz` (app up + DB on the disk readable). A red CI run means no
+deploy - fix it, don't bypass it. Dependabot opens monthly dependency PRs.
 **Never push without the user's explicit go-ahead in this conversation**, and say
 what the push will change in production (migrations, AI behaviour, UI) before
 asking. Use the `ship` skill.
