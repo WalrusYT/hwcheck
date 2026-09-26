@@ -1,10 +1,9 @@
-"""SQLite storage for homework codes and student submissions."""
+"""SQLite storage: schema, additive migrations, and connections."""
 
-import os
 import sqlite3
-from pathlib import Path
 
-DATA_DIR = Path(os.environ.get("DATA_DIR", Path(__file__).parent))
+from config import DATA_DIR
+
 DB_PATH = DATA_DIR / "hwcheck.db"
 
 SCHEMA = """
@@ -91,6 +90,14 @@ CREATE TABLE IF NOT EXISTS notifications (
     is_read INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS login_attempts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    scope TEXT NOT NULL,
+    ip TEXT,
+    attempted_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_login_attempts_lookup ON login_attempts (scope, ip, attempted_at);
 """
 
 
@@ -101,25 +108,27 @@ def get_db():
     return conn
 
 
+# Columns added after the table first shipped. The production database already
+# holds real data, so every change is an additive ALTER guarded by a check.
+MIGRATIONS = [
+    ("homeworks", "task_files", "TEXT NOT NULL DEFAULT '[]'"),
+    ("students", "first_login_at", "TEXT"),
+    ("students", "curriculum", "TEXT NOT NULL DEFAULT 'other'"),
+    ("students", "school_year", "TEXT"),
+    ("students", "tutor_notes", "TEXT"),
+    ("student_submissions", "tutor_result", "TEXT"),
+    ("student_submissions", "ai_job_id", "TEXT"),
+    ("homework_assignments", "solution_files", "TEXT NOT NULL DEFAULT '[]'"),
+]
+
+
 def init_db():
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     conn = get_db()
     conn.executescript(SCHEMA)
-    # Migration for databases created before task_files existed.
-    columns = {row["name"] for row in conn.execute("PRAGMA table_info(homeworks)")}
-    if "task_files" not in columns:
-        conn.execute("ALTER TABLE homeworks ADD COLUMN task_files TEXT NOT NULL DEFAULT '[]'")
-    # Migration for databases created before first_login_at existed.
-    student_columns = {row["name"] for row in conn.execute("PRAGMA table_info(students)")}
-    if "first_login_at" not in student_columns:
-        conn.execute("ALTER TABLE students ADD COLUMN first_login_at TEXT")
-    # Migration for databases created before tutor_result existed.
-    submission_columns = {row["name"] for row in conn.execute("PRAGMA table_info(student_submissions)")}
-    if "tutor_result" not in submission_columns:
-        conn.execute("ALTER TABLE student_submissions ADD COLUMN tutor_result TEXT")
-    # Migration for databases created before solution_files existed.
-    assignment_columns = {row["name"] for row in conn.execute("PRAGMA table_info(homework_assignments)")}
-    if "solution_files" not in assignment_columns:
-        conn.execute("ALTER TABLE homework_assignments ADD COLUMN solution_files TEXT NOT NULL DEFAULT '[]'")
+    for table, column, ddl in MIGRATIONS:
+        existing = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
+        if column not in existing:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}")
     conn.commit()
     conn.close()

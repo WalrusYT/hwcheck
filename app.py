@@ -1,25 +1,51 @@
 """TutorIlya Homework: student portal with AI-assisted homework grading for the tutor."""
 
 import json
+import logging
 import os
 
 from dotenv import load_dotenv
-from flask import Flask, redirect, render_template, session, url_for
+from flask import Flask, jsonify, redirect, render_template, request, session, url_for
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 load_dotenv()
 
+import auth
 import db
 import notifications
 from admin_routes import admin_bp
-from config import ASSIGNMENT_FILES_DIR, SUBMISSION_FILES_DIR, UPLOAD_DIR
+from config import ASSIGNMENT_FILES_DIR, IS_PRODUCTION, SUBMISSION_FILES_DIR, UPLOAD_DIR
 from student_routes import student_bp
 from translations import t
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("FLASK_SECRET_KEY", "dev-secret-change-me")
-app.config["MAX_CONTENT_LENGTH"] = 20 * 1024 * 1024  # 20 MB per request
+
+secret_key = os.environ.get("FLASK_SECRET_KEY")
+if not secret_key:
+    if IS_PRODUCTION:
+        raise RuntimeError("FLASK_SECRET_KEY is not set - refusing to start with a guessable session key.")
+    secret_key = "dev-only-not-secret"
+app.secret_key = secret_key
+
+if IS_PRODUCTION and len(os.environ.get("ADMIN_PASSWORD", "")) < 12:
+    logging.warning("ADMIN_PASSWORD is shorter than 12 characters - it protects every student's data.")
+
+app.config.update(
+    MAX_CONTENT_LENGTH=20 * 1024 * 1024,  # 20 MB per request
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_SECURE=IS_PRODUCTION,
+)
+if IS_PRODUCTION:
+    # Render terminates TLS at one proxy hop; without this every request appears to
+    # come from the proxy's address, which would make per-IP login limits global.
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
+
+app.before_request(auth.verify_csrf)
 app.jinja_env.filters["fromjson"] = json.loads
 app.jinja_env.globals["t"] = t
+app.jinja_env.globals["csrf_field"] = auth.csrf_field
+app.jinja_env.globals["csrf_token"] = auth.csrf_token
 
 
 def wrap_math(value):
@@ -86,6 +112,15 @@ def index():
 def favicon():
     # Browsers probe this legacy path regardless of our <link rel="icon"> tags.
     return redirect(url_for("static", filename="favicon.png"))
+
+
+@app.errorhandler(400)
+def bad_request(exc):
+    expired = getattr(exc, "description", None) == "csrf"
+    message = "Your session expired. Reload the page and try again." if expired else "That request wasn't valid."
+    if request.is_json:
+        return jsonify({"error": message}), 400
+    return render_template("error.html", message=message), 400
 
 
 @app.errorhandler(413)

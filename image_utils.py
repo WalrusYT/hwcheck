@@ -52,6 +52,41 @@ def _load_capped(file_path, ext):
     return img
 
 
+def load_pages(file_path):
+    """Decoded RGB page images (one per PDF page, one for a photo), capped at MAX_DIM."""
+    if file_path.suffix.lower() == ".pdf":
+        pages = []
+        doc = fitz.open(file_path)
+        try:
+            for page in doc:
+                png = _scaled_pdf_pixmap(page).tobytes("png")
+                pages.append(Image.open(io.BytesIO(png)).convert("RGB"))
+        finally:
+            doc.close()
+        return pages
+    return [_load_capped(file_path, file_path.suffix.lower())]
+
+
+def image_to_data_url(img):
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG", quality=90)
+    return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode("utf-8")
+
+
+def horizontal_strips(img, count=3, overlap=0.12):
+    """Overlapping full-width bands of a page. The vision API downscales a whole
+    page to roughly 768px on its short side, where dense handwritten fractions
+    become unreadable; each band is sent at close to native resolution instead."""
+    band = img.height / count
+    pad = int(band * overlap)
+    strips = []
+    for i in range(count):
+        top = max(0, int(i * band) - pad)
+        bottom = min(img.height, int((i + 1) * band) + pad)
+        strips.append(img.crop((0, top, img.width, bottom)))
+    return strips
+
+
 def file_to_image_data_urls(file_path):
     """Convert an uploaded image or PDF into a list of base64 data URLs (one per page/image)."""
     ext = file_path.suffix.lower()

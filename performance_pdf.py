@@ -88,6 +88,7 @@ def build_performance_pdf(student_name, average_letter, average_gpa, history, na
     if not history:
         page.insert_text((MARGIN, y), "No graded homework yet.", fontsize=10, fontname=FONT_REGULAR, color=(0.5, 0.5, 0.5))
 
-    pdf_bytes = doc.tobytes()
+    doc.subset_fonts()  # the two full Noto Sans files were ~90% of the file size
+    pdf_bytes = doc.tobytes(garbage=3, deflate=True)
     doc.close()
     return pdf_bytes

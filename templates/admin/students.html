@@ -6,7 +6,7 @@
 <div class="card wide">
   <h1>Create a student</h1>
   <p class="muted">Pick a username and password, then share them with the student yourself.</p>
-  <form method="post" class="form">
+  <form method="post" class="form">{{ csrf_field() }}
     <div class="form-row">
       <label>
         Full name
@@ -33,6 +33,7 @@
       Zoom link <span class="muted">(optional)</span>
       <input type="url" name="zoom_link" placeholder="https://zoom.us/j/...">
     </label>
+    {% include "admin/_profile_fields.html" %}
     <button type="submit">Create student</button>
   </form>
 </div>
@@ -54,7 +55,7 @@
         <td><a href="{{ url_for('admin.student_detail', student_id=s['id']) }}" class="button button-secondary button-accent">View →</a></td>
         <td>
           <form method="post" action="{{ url_for('admin.delete_student', student_id=s['id']) }}"
-                onsubmit="return confirm('Delete this student and ALL their homework, submissions, and chat history? This cannot be undone.');">
+                onsubmit="return confirm('Delete this student and ALL their homework, submissions, and chat history? This cannot be undone.');">{{ csrf_field() }}
             <button type="submit" class="button-secondary button-danger">Delete</button>
           </form>
         </td>

@@ -4,16 +4,16 @@
 <div class="card narrow">
   <div class="login-logo">{% include "student/_logo.html" %}</div>
   <div class="lang-switch">
-    <form method="post" action="{{ url_for('student.set_language', lang='en') }}" class="lang-form">
+    <form method="post" action="{{ url_for('student.set_language', lang='en') }}" class="lang-form">{{ csrf_field() }}
       <button type="submit" class="lang-btn {{ 'lang-active' if session.get('lang', 'en') == 'en' else '' }}">EN</button>
     </form>
-    <form method="post" action="{{ url_for('student.set_language', lang='ru') }}" class="lang-form">
+    <form method="post" action="{{ url_for('student.set_language', lang='ru') }}" class="lang-form">{{ csrf_field() }}
       <button type="submit" class="lang-btn {{ 'lang-active' if session.get('lang') == 'ru' else '' }}">RU</button>
     </form>
   </div>
   <h1>{{ t('login.title') }}</h1>
   {% if error %}<div class="errors">{{ error }}</div>{% endif %}
-  <form method="post" class="form">
+  <form method="post" class="form">{{ csrf_field() }}
     <label>
       {{ t('login.username') }}
       <input type="text" name="username" required autofocus>

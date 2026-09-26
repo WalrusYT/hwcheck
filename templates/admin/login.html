@@ -4,7 +4,7 @@
 <div class="card narrow">
   <h1>Tutor login</h1>
   {% if error %}<div class="errors">{{ error }}</div>{% endif %}
-  <form method="post" class="form">
+  <form method="post" class="form">{{ csrf_field() }}
     <label>
       Password
       <input type="password" name="password" required autofocus>

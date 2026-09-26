@@ -28,8 +28,23 @@ import notifications
 import performance
 import translations
 import performance_pdf
-from auth import admin_required, hash_password, password_error
-from config import ALLOWED_EXT, ASSIGNMENT_FILES_DIR, MAX_FILES, SOLUTION_FILES_DIR, SUBMISSION_FILES_DIR
+from auth import (
+    admin_required,
+    clear_failed_logins,
+    hash_password,
+    login_blocked,
+    password_error,
+    record_failed_login,
+    safe_next_url,
+)
+from config import (
+    ALLOWED_EXT,
+    ASSIGNMENT_FILES_DIR,
+    CURRICULA,
+    MAX_FILES,
+    SOLUTION_FILES_DIR,
+    SUBMISSION_FILES_DIR,
+)
 
 admin_bp = Blueprint("admin", __name__, url_prefix="/admin")
 
@@ -42,14 +57,20 @@ def generate_temp_password():
 def admin_login():
     error = None
     if request.method == "POST":
+        if login_blocked("admin"):
+            return render_template(
+                "admin/login.html", error="Too many failed attempts. Wait 15 minutes and try again."
+            ), 429
         password = request.form.get("password", "")
         expected = os.environ.get("ADMIN_PASSWORD")
         if not expected:
             error = "ADMIN_PASSWORD is not set on the server - check .env."
         elif secrets.compare_digest(password, expected):
+            clear_failed_logins("admin")
             session["is_admin"] = True
-            return redirect(request.args.get("next") or url_for("admin.dashboard"))
+            return redirect(safe_next_url(request.args.get("next"), url_for("admin.dashboard")))
         else:
+            record_failed_login("admin")
             error = "Wrong password."
     return render_template("admin/login.html", error=error)
 
@@ -115,12 +136,15 @@ def students():
         elif pw_error:
             flash(pw_error)
         else:
+            profile = _profile_from_form()
             try:
                 conn.execute(
                     """INSERT INTO students
-                       (name, username, password_hash, schedule_text, miro_link, zoom_link)
-                       VALUES (?, ?, ?, ?, ?, ?)""",
-                    (name, username, hash_password(password), schedule_text, miro_link, zoom_link),
+                       (name, username, password_hash, schedule_text, miro_link, zoom_link,
+                        language, curriculum, school_year, tutor_notes)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (name, username, hash_password(password), schedule_text, miro_link, zoom_link,
+                     profile["language"], profile["curriculum"], profile["school_year"], profile["tutor_notes"]),
                 )
                 conn.commit()
                 flash(f"Created student '{name}' (username: {username}, password: {password}) - share these with them.")
@@ -150,14 +174,22 @@ def student_detail(student_id):
 @admin_bp.route("/students/<int:student_id>/update", methods=["POST"])
 @admin_required
 def student_update(student_id):
+    name = (request.form.get("name") or "").strip()
+    if not name:
+        flash("Name can't be empty.")
+        return redirect(url_for("admin.student_detail", student_id=student_id))
+    profile = _profile_from_form()
     conn = db.get_db()
     conn.execute(
-        """UPDATE students SET name = ?, schedule_text = ?, miro_link = ?, zoom_link = ? WHERE id = ?""",
+        """UPDATE students SET name = ?, schedule_text = ?, miro_link = ?, zoom_link = ?,
+               language = ?, curriculum = ?, school_year = ?, tutor_notes = ?
+           WHERE id = ?""",
         (
-            (request.form.get("name") or "").strip(),
+            name,
             (request.form.get("schedule_text") or "").strip(),
             (request.form.get("miro_link") or "").strip(),
             (request.form.get("zoom_link") or "").strip(),
+            profile["language"], profile["curriculum"], profile["school_year"], profile["tutor_notes"],
             student_id,
         ),
     )
@@ -165,6 +197,18 @@ def student_update(student_id):
     conn.close()
     flash("Student info updated.")
     return redirect(url_for("admin.student_detail", student_id=student_id))
+
+
+def _profile_from_form():
+    """The fields that shape how the AI talks to and grades this student."""
+    language = request.form.get("language")
+    curriculum = request.form.get("curriculum")
+    return {
+        "language": language if language in ("en", "ru") else "en",
+        "curriculum": curriculum if curriculum in CURRICULA else "other",
+        "school_year": (request.form.get("school_year") or "").strip() or None,
+        "tutor_notes": (request.form.get("tutor_notes") or "").strip() or None,
+    }
 
 
 @admin_bp.route("/students/<int:student_id>/reset-password", methods=["POST"])
@@ -296,6 +340,9 @@ def create_assignment(student_id):
         link=url_for("student.homework_detail", assignment_id=assignment_id),
     )
     flash(f"Created assignment '{title}'.")
+    if not task_files:
+        flash("No homework sheet attached - AI grading will have to guess which problems exist. "
+              "Delete and recreate the assignment with the sheet if you have it.")
     return redirect(url_for("admin.student_detail", student_id=student_id))
 
 
@@ -447,8 +494,7 @@ def submission_detail(submission_id):
                     (grade, comment, submission_id),
                 )
                 conn.commit()
-                performance.refresh_narrative(conn, submission["student_id"])
-                conn.commit()
+                performance.refresh_narrative_in_background(submission["student_id"])
                 if grade != previous_grade:
                     assignment_title = conn.execute(
                         "SELECT title FROM homework_assignments WHERE id = ?", (submission["assignment_id"],)
@@ -526,6 +572,19 @@ def delete_submission(submission_id):
     return redirect(url_for("admin.dashboard"))
 
 
+def _tutor_corrected_answers(submission):
+    """Student answers the tutor changed by hand. A recheck keeps these instead of
+    re-reading the photo, so it can't undo the tutor's own corrections."""
+    if not submission["tutor_result"] or not submission["ai_result"]:
+        return {}
+    ai_answers = {p["problem_label"]: p["student_answer"] for p in json.loads(submission["ai_result"])["problems"]}
+    return {
+        p["problem_label"]: p["student_answer"]
+        for p in json.loads(submission["tutor_result"])
+        if p["student_answer"] != ai_answers.get(p["problem_label"])
+    }
+
+
 def _start_grading(conn, submission, tutor_note=None, reset_tutor_result=False):
     assignment = conn.execute(
         "SELECT * FROM homework_assignments WHERE id = ?", (submission["assignment_id"],)
@@ -539,18 +598,18 @@ def _start_grading(conn, submission, tutor_note=None, reset_tutor_result=False):
     solution_file_names = json.loads(assignment["solution_files"] or "[]") if assignment else []
     solution_file_paths = [SOLUTION_FILES_DIR / str(submission["assignment_id"]) / n for n in solution_file_names]
 
-    conn.execute("UPDATE student_submissions SET ai_status = 'pending', ai_error = NULL WHERE id = ?", (submission["id"],))
-    conn.commit()
-
     grading_jobs.start_grading_job(
         submission["id"],
         [sub_dir / n for n in files],
         student["name"],
-        assignment["topic"] if assignment else None,
+        (assignment["topic"] or assignment["title"]) if assignment else None,
         task_file_paths=task_file_paths,
         solution_file_paths=solution_file_paths,
         tutor_note=tutor_note,
         reset_tutor_result=reset_tutor_result,
+        curriculum=student["curriculum"],
+        language=student["language"],
+        known_answers=_tutor_corrected_answers(submission),
     )
 
 
@@ -622,19 +681,30 @@ def notifications_mark_all_read():
 
 # ---- File serving ---------------------------------------------------------
 
+def _serve_listed_file(table, column, row_id, directory, filename):
+    """Serve a file only if the database lists it for that row - never anything
+    else that happens to sit in the directory."""
+    conn = db.get_db()
+    row = conn.execute(f"SELECT {column} FROM {table} WHERE id = ?", (row_id,)).fetchone()
+    conn.close()
+    if not row or filename not in json.loads(row[column] or "[]"):
+        abort(404)
+    return send_from_directory(directory / str(row_id), filename)
+
+
 @admin_bp.route("/assignment-files/<int:assignment_id>/<path:filename>")
 @admin_required
 def assignment_file(assignment_id, filename):
-    return send_from_directory(ASSIGNMENT_FILES_DIR / str(assignment_id), filename)
+    return _serve_listed_file("homework_assignments", "task_files", assignment_id, ASSIGNMENT_FILES_DIR, filename)
 
 
 @admin_bp.route("/assignment-solutions/<int:assignment_id>/<path:filename>")
 @admin_required
 def assignment_solution_file(assignment_id, filename):
-    return send_from_directory(SOLUTION_FILES_DIR / str(assignment_id), filename)
+    return _serve_listed_file("homework_assignments", "solution_files", assignment_id, SOLUTION_FILES_DIR, filename)
 
 
 @admin_bp.route("/submission-files/<int:submission_id>/<path:filename>")
 @admin_required
 def submission_file(submission_id, filename):
-    return send_from_directory(SUBMISSION_FILES_DIR / str(submission_id), filename)
+    return _serve_listed_file("student_submissions", "files", submission_id, SUBMISSION_FILES_DIR, filename)

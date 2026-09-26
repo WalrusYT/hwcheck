@@ -75,7 +75,7 @@
   {% if errors %}
     <div class="errors">{% for e in errors %}<div>{{ e }}</div>{% endfor %}</div>
   {% endif %}
-  <form method="post" enctype="multipart/form-data" id="submit-form" class="form">
+  <form method="post" enctype="multipart/form-data" id="submit-form" class="form">{{ csrf_field() }}
     <div id="file-thumbs" class="files"></div>
     <input type="file" id="file-input" name="files" accept="image/*,.heic,.heif,.pdf" multiple hidden>
     <div class="form-row">
@@ -87,7 +87,7 @@
   {% if submission %}
   <p class="muted">{{ t('homework.your_submission') }}: {{ submission['submitted_at'] }} — {{ t('homework.submitted_status') }}</p>
   <form method="post" action="{{ url_for('student.remove_submission', assignment_id=assignment['id']) }}"
-        onsubmit="return confirm({{ t('homework.remove_confirm') | tojson }});" style="margin-top:10px">
+        onsubmit="return confirm({{ t('homework.remove_confirm') | tojson }});" style="margin-top:10px">{{ csrf_field() }}
     <button type="submit" class="button button-secondary button-danger">{{ t('homework.remove_submission') }}</button>
   </form>
   {% endif %}

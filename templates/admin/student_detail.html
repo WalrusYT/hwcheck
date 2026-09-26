@@ -10,7 +10,7 @@
     <a href="{{ url_for('admin.student_performance', student_id=student['id']) }}">View performance →</a>
   </p>
 
-  <form method="post" action="{{ url_for('admin.student_update', student_id=student['id']) }}" class="form">
+  <form method="post" action="{{ url_for('admin.student_update', student_id=student['id']) }}" class="form">{{ csrf_field() }}
     <label>
       Full name
       <input type="text" name="name" value="{{ student['name'] }}" required>
@@ -27,17 +27,18 @@
       Zoom link
       <input type="url" name="zoom_link" value="{{ student['zoom_link'] or '' }}">
     </label>
+    {% include "admin/_profile_fields.html" %}
     <button type="submit">Save changes</button>
   </form>
 
-  <form method="post" action="{{ url_for('admin.student_reset_password', student_id=student['id']) }}" style="margin-top:14px">
+  <form method="post" action="{{ url_for('admin.student_reset_password', student_id=student['id']) }}" style="margin-top:14px">{{ csrf_field() }}
     <button type="submit" class="button-secondary">Reset password</button>
   </form>
 </div>
 
 <div class="card wide">
   <h2>Create an assignment</h2>
-  <form method="post" action="{{ url_for('admin.create_assignment', student_id=student['id']) }}" enctype="multipart/form-data" class="form">
+  <form method="post" action="{{ url_for('admin.create_assignment', student_id=student['id']) }}" enctype="multipart/form-data" class="form">{{ csrf_field() }}
     <div class="form-row">
       <label>
         Title
@@ -49,7 +50,7 @@
       </label>
     </div>
     <label>
-      Homework sheet <span class="muted">(optional but recommended - photo/PDF of the problems)</span>
+      Homework sheet <span class="muted">(strongly recommended - without it the AI can't tell which problems exist, and grading is much less reliable)</span>
       <input type="file" name="task_files" accept="image/*,.heic,.heif,.pdf" multiple>
     </label>
     <label>
@@ -86,7 +87,7 @@
         <td>{{ a['created_at'] }}</td>
         <td>
           <form method="post" action="{{ url_for('admin.delete_assignment', assignment_id=a['id']) }}"
-                onsubmit="return confirm('Delete this assignment and all submissions/chat history for it? This cannot be undone.');">
+                onsubmit="return confirm('Delete this assignment and all submissions/chat history for it? This cannot be undone.');">{{ csrf_field() }}
             <button type="submit" class="button button-secondary button-danger">Delete</button>
           </form>
         </td>
@@ -102,7 +103,7 @@
   <h2>Danger zone</h2>
   <p class="muted">Permanently deletes this student's account along with all their assignments, submissions, chat history, and notifications. This cannot be undone.</p>
   <form method="post" action="{{ url_for('admin.delete_student', student_id=student['id']) }}"
-        onsubmit="return confirm('Delete this student and ALL their homework, submissions, and chat history? This cannot be undone.');">
+        onsubmit="return confirm('Delete this student and ALL their homework, submissions, and chat history? This cannot be undone.');">{{ csrf_field() }}
     <button type="submit" class="button-danger">Delete student</button>
   </form>
 </div>

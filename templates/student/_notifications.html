@@ -10,7 +10,7 @@
     <div class="notif-header">
       <strong>{{ t('nav.notifications') }}</strong>
       {% if student_unread_count %}
-      <form method="post" action="{{ url_for('student.notifications_mark_all_read') }}">
+      <form method="post" action="{{ url_for('student.notifications_mark_all_read') }}">{{ csrf_field() }}
         <button type="submit" class="notif-mark-all">{{ t('nav.notifications_mark_all') }}</button>
       </form>
       {% endif %}

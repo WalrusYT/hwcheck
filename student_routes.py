@@ -23,7 +23,16 @@ import grading_jobs
 import homework_chat
 import notifications
 import performance
-from auth import check_password, hash_password, password_error, student_required
+from auth import (
+    check_password,
+    clear_failed_logins,
+    hash_password,
+    login_blocked,
+    password_error,
+    record_failed_login,
+    safe_next_url,
+    student_required,
+)
 from config import ALLOWED_EXT, ASSIGNMENT_FILES_DIR, MAX_FILES, SOLUTION_FILES_DIR, SUBMISSION_FILES_DIR
 from translations import t
 
@@ -34,11 +43,14 @@ student_bp = Blueprint("student", __name__, url_prefix="/me")
 def login():
     error = None
     if request.method == "POST":
+        if login_blocked("student"):
+            return render_template("student/login.html", error=t("login.too_many")), 429
         username = (request.form.get("username") or "").strip().lower()
         password = request.form.get("password", "")
         conn = db.get_db()
         student = conn.execute("SELECT * FROM students WHERE username = ?", (username,)).fetchone()
         if student and check_password(student["password_hash"], password):
+            clear_failed_logins("student")
             session["student_id"] = student["id"]
             session["lang"] = student["language"]
             if not student["first_login_at"]:
@@ -52,8 +64,9 @@ def login():
                     link=url_for("admin.student_detail", student_id=student["id"]),
                 )
             conn.close()
-            return redirect(request.args.get("next") or url_for("student.dashboard"))
+            return redirect(safe_next_url(request.args.get("next"), url_for("student.dashboard")))
         conn.close()
+        record_failed_login("student")
         error = t("login.error")
     return render_template("student/login.html", error=error)
 
@@ -73,10 +86,10 @@ def set_language(lang):
         conn = db.get_db()
         student = conn.execute("SELECT * FROM students WHERE id = ?", (session["student_id"],)).fetchone()
         conn.execute("UPDATE students SET language = ? WHERE id = ?", (lang, session["student_id"]))
-        if student["language"] != lang and student["performance_narrative"]:
-            performance.refresh_narrative(conn, session["student_id"])
         conn.commit()
         conn.close()
+        if student["language"] != lang and student["performance_narrative"]:
+            performance.refresh_narrative_in_background(session["student_id"])
     return redirect(request.referrer or url_for("student.dashboard"))
 
 
@@ -97,12 +110,17 @@ def homeworks():
         "SELECT * FROM homework_assignments WHERE student_id = ? ORDER BY created_at DESC",
         (session["student_id"],),
     ).fetchall()
+    submissions = conn.execute(
+        "SELECT assignment_id, feedback_published, tutor_grade FROM student_submissions WHERE student_id = ?",
+        (session["student_id"],),
+    ).fetchall()
+    conn.close()
+    by_assignment = {}
+    for s in submissions:
+        by_assignment.setdefault(s["assignment_id"], []).append(s)
     items = []
     for a in assignments:
-        subs = conn.execute(
-            "SELECT * FROM student_submissions WHERE assignment_id = ? ORDER BY submitted_at DESC",
-            (a["id"],),
-        ).fetchall()
+        subs = by_assignment.get(a["id"], [])
         published = next((s for s in subs if s["feedback_published"]), None)
         if published:
             status, grade = "reviewed", published["tutor_grade"]
@@ -111,7 +129,6 @@ def homeworks():
         else:
             status, grade = "not_submitted", None
         items.append({"assignment": a, "status": status, "grade": grade})
-    conn.close()
     return render_template("student/homeworks.html", items=items)
 
 
@@ -198,9 +215,11 @@ def homework_detail(assignment_id):
                 submission_id,
                 [sub_dir / n for n in saved_names],
                 student["name"],
-                assignment["topic"],
+                assignment["topic"] or assignment["title"],
                 task_file_paths=task_file_paths,
                 solution_file_paths=solution_file_paths,
+                curriculum=student["curriculum"],
+                language=student["language"],
             )
             return redirect(url_for("student.homework_detail", assignment_id=assignment_id))
 
@@ -294,17 +313,23 @@ def homework_chat_endpoint(assignment_id):
     task_file_names = json.loads(assignment["task_files"] or "[]")
     task_file_paths = [ASSIGNMENT_FILES_DIR / str(assignment_id) / n for n in task_file_names]
 
-    conn.execute(
+    # Inserting the question first reserves the coin, so two quick clicks can't both
+    # pass the limit check above; if the model call fails the reservation is undone.
+    cur = conn.execute(
         "INSERT INTO hint_chat_messages (assignment_id, student_id, role, content) VALUES (?, ?, 'user', ?)",
         (assignment_id, session["student_id"], message),
     )
+    question_id = cur.lastrowid
     conn.commit()
 
     try:
-        reply_text = homework_chat.reply(task_file_paths, history, lang=student["language"])
-    except homework_chat.ChatError as exc:
+        reply_text = homework_chat.reply(history, student=student, assignment=assignment,
+                                         task_file_paths=task_file_paths)
+    except homework_chat.ChatError:
+        conn.execute("DELETE FROM hint_chat_messages WHERE id = ?", (question_id,))
+        conn.commit()
         conn.close()
-        return jsonify({"error": str(exc)}), 502
+        return jsonify({"error": t("chat.failed")}), 502
 
     conn.execute(
         "INSERT INTO hint_chat_messages (assignment_id, student_id, role, content) VALUES (?, ?, 'assistant', ?)",
@@ -411,10 +436,10 @@ def task_file(assignment_id, filename):
 def submission_file(submission_id, filename):
     conn = db.get_db()
     submission = conn.execute(
-        "SELECT id FROM student_submissions WHERE id = ? AND student_id = ?",
+        "SELECT id, files FROM student_submissions WHERE id = ? AND student_id = ?",
         (submission_id, session["student_id"]),
     ).fetchone()
     conn.close()
-    if not submission:
+    if not submission or filename not in json.loads(submission["files"] or "[]"):
         abort(404)
     return send_from_directory(SUBMISSION_FILES_DIR / str(submission_id), filename)

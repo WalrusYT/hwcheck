@@ -1,0 +1,28 @@
+{# Fields that shape how the AI grades and tutors this student. `student` is optional (create form). #}
+{% set p = student or {} %}
+<div class="form-row">
+  <label>
+    Curriculum
+    <select name="curriculum">
+      {% for value, label in [('pt', 'Portuguese school'), ('ru', 'Russian school'), ('other', 'Other / not set')] %}
+        <option value="{{ value }}" {{ 'selected' if (p['curriculum'] or 'other') == value }}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>
+    School year <span class="muted">(e.g. 9.º ano, 8 класс)</span>
+    <input type="text" name="school_year" value="{{ p['school_year'] or '' }}">
+  </label>
+  <label>
+    Language
+    <select name="language">
+      {% for value, label in [('ru', 'Russian'), ('en', 'English')] %}
+        <option value="{{ value }}" {{ 'selected' if (p['language'] or 'en') == value }}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </label>
+</div>
+<label>
+  Notes for the AI helper <span class="muted">(private - never shown to the student, e.g. "struggles with negative numbers")</span>
+  <textarea name="tutor_notes" rows="2">{{ p['tutor_notes'] or '' }}</textarea>
+</label>

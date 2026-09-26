@@ -36,11 +36,15 @@
 
   {% set ai_pending = submission['ai_status'] == 'pending' %}
   <h2>AI review {% if show_form %}(draft — verify per task before publishing){% endif %}</h2>
+  {% if not task_files %}
+    <div class="flags">This assignment has no homework sheet attached, so the AI had to guess which problems exist
+      and what they ask. Check its problem list against the photo carefully.</div>
+  {% endif %}
   {% if ai_pending %}
     <p class="muted" id="ai-pending-msg">⏳ AI is grading this submission in the background — this page will update automatically when it's done.</p>
   {% elif submission['ai_status'] == 'error' %}
     <div class="errors">AI grading failed: {{ submission['ai_error'] }}</div>
-    <form method="post" action="{{ url_for('admin.retry_grading', submission_id=submission['id']) }}" style="margin-top:10px">
+    <form method="post" action="{{ url_for('admin.retry_grading', submission_id=submission['id']) }}" style="margin-top:10px">{{ csrf_field() }}
       <button type="submit" class="button-secondary">Retry AI grading</button>
     </form>
   {% elif not ai_result %}
@@ -66,7 +70,7 @@
   {% if show_form and ai_pending %}
   <p class="muted">Waiting for the AI recheck to finish before you can edit feedback — this page will update automatically.</p>
   {% elif show_form %}
-  <form method="post" class="form">
+  <form method="post" class="form">{{ csrf_field() }}
     {% if problems %}
     <input type="hidden" name="problem_count" value="{{ problems|length }}">
     <div class="problem-cards">
@@ -114,7 +118,8 @@
       {% endfor %}
     </div>
     <div class="form-row">
-      <button type="submit" formaction="{{ url_for('admin.regrade_submission', submission_id=submission['id']) }}" class="button-secondary">Recheck flagged tasks with AI</button>
+      <button type="submit" formaction="{{ url_for('admin.regrade_submission', submission_id=submission['id']) }}" class="button-secondary"
+              onclick="return confirm('The AI will re-grade the whole submission and replace the verdicts, correct answers and explanations in this table. Student answers you corrected by hand are kept. Continue?');">Recheck flagged tasks with AI</button>
     </div>
     {% endif %}
 
@@ -168,7 +173,7 @@
   <h2>Danger zone</h2>
   <p class="muted">Permanently deletes this submission and its uploaded files. This cannot be undone.</p>
   <form method="post" action="{{ url_for('admin.delete_submission', submission_id=submission['id']) }}"
-        onsubmit="return confirm('Delete this submission? This cannot be undone.');">
+        onsubmit="return confirm('Delete this submission? This cannot be undone.');">{{ csrf_field() }}
     <button type="submit" class="button-danger">Delete submission</button>
   </form>
 </div>

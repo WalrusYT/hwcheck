@@ -1,10 +1,12 @@
 """Grade averaging and AI-generated performance narrative for a student."""
 
-import os
+import logging
+import threading
 
-from openai import OpenAI
+import db
+import llm
 
-MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o")
+log = logging.getLogger(__name__)
 
 GRADE_POINTS = {"A": 4, "B": 3, "C": 2, "D": 1, "F": 0}
 POINTS_TO_LETTER = [(3.5, "A"), (2.5, "B"), (1.5, "C"), (0.5, "D"), (-1, "F")]
@@ -59,35 +61,50 @@ def generate_narrative(student_name, history, lang="en"):
         lines.append(line)
     user_content = "\n".join(lines)
 
-    client = OpenAI()
     system_prompt = NARRATIVE_PROMPT.get(lang, NARRATIVE_PROMPT["en"])
-    response = client.chat.completions.create(
-        model=MODEL,
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_content},
-        ],
+    return llm.complete(
+        [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_content}],
+        max_tokens=2000,
     )
-    return response.choices[0].message.content
 
 
-def refresh_narrative(conn, student_id):
-    """Regenerate and cache the student's performance narrative in their current language."""
-    student = conn.execute("SELECT * FROM students WHERE id = ?", (student_id,)).fetchone()
-    rows = conn.execute(
-        """SELECT ss.tutor_grade, ss.tutor_comment, ha.title AS assignment_title
-           FROM student_submissions ss
-           JOIN homework_assignments ha ON ha.id = ss.assignment_id
-           WHERE ss.student_id = ? AND ss.feedback_published = 1
-           ORDER BY ss.reviewed_at DESC LIMIT 15""",
-        (student_id,),
-    ).fetchall()
-    history = [{"title": r["assignment_title"], "grade": r["tutor_grade"], "comment": r["tutor_comment"]} for r in rows]
+def refresh_narrative(student_id):
+    """Regenerate and cache the student's performance narrative in their current language.
+    On failure the previous narrative is kept - the grades themselves never depend on it."""
+    conn = db.get_db()
     try:
-        narrative = generate_narrative(student["name"], history, lang=student["language"])
-    except Exception:
-        narrative = student["performance_narrative"]
-    conn.execute(
-        "UPDATE students SET performance_narrative = ?, performance_narrative_updated_at = datetime('now') WHERE id = ?",
-        (narrative, student_id),
-    )
+        student = conn.execute("SELECT * FROM students WHERE id = ?", (student_id,)).fetchone()
+        if student is None:
+            return
+        rows = conn.execute(
+            """SELECT ss.tutor_grade, ss.tutor_comment, ha.title AS assignment_title
+               FROM student_submissions ss
+               JOIN homework_assignments ha ON ha.id = ss.assignment_id
+               WHERE ss.student_id = ? AND ss.feedback_published = 1
+               ORDER BY ss.reviewed_at DESC LIMIT 15""",
+            (student_id,),
+        ).fetchall()
+        history = [{"title": r["assignment_title"], "grade": r["tutor_grade"], "comment": r["tutor_comment"]}
+                   for r in rows]
+        try:
+            narrative = generate_narrative(student["name"], history, lang=student["language"])
+        except llm.LLMError:
+            log.exception("performance narrative for student %s failed; keeping the previous one", student_id)
+            return
+        conn.execute(
+            "UPDATE students SET performance_narrative = ?, performance_narrative_updated_at = datetime('now') "
+            "WHERE id = ?",
+            (narrative, student_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _run_in_background(fn, *args):
+    threading.Thread(target=fn, args=args, daemon=True).start()
+
+
+def refresh_narrative_in_background(student_id):
+    """Publishing feedback and switching language shouldn't wait several seconds on an AI call."""
+    _run_in_background(refresh_narrative, student_id)
