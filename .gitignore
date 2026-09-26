@@ -3,5 +3,7 @@ __pycache__/
 *.pyc
 hwcheck.db
 uploads/
+evals/cases/
+evals/results/
 .idea/
 server.log
