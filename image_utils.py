@@ -53,18 +53,20 @@ def _load_capped(file_path, ext):
 
 
 def load_pages(file_path):
-    """Decoded RGB page images (one per PDF page, one for a photo), capped at MAX_DIM."""
+    """Yield decoded RGB page images (one per PDF page, one for a photo), capped at
+    MAX_DIM - one at a time, so a many-page upload never sits in memory all at once."""
     if file_path.suffix.lower() == ".pdf":
-        pages = []
         doc = fitz.open(file_path)
         try:
             for page in doc:
-                png = _scaled_pdf_pixmap(page).tobytes("png")
-                pages.append(Image.open(io.BytesIO(png)).convert("RGB"))
+                pix = _scaled_pdf_pixmap(page)
+                if pix.alpha or pix.n != 3:
+                    pix = fitz.Pixmap(fitz.csRGB, pix, 0)
+                yield Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
         finally:
             doc.close()
-        return pages
-    return [_load_capped(file_path, file_path.suffix.lower())]
+    else:
+        yield _load_capped(file_path, file_path.suffix.lower())
 
 
 def image_to_data_url(img):

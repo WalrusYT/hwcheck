@@ -119,6 +119,32 @@ def test_reading_pass_never_sees_the_answer_key(fake_llm, page, tmp_path):
     assert "answer key" in json.dumps(grading_call["messages"]).lower()
 
 
+def test_each_file_is_decoded_once_per_grading(fake_llm, page, tmp_path, monkeypatch):
+    """Both readings and the grader used to decode the same photo and sheet separately,
+    at the same time - enough to push a 512 MB Render instance over its memory limit."""
+    sheet = tmp_path / "sheet.jpg"
+    Image.new("RGB", (300, 400), "white").save(sheet)
+    decoded = []
+    real_load_pages = grading.load_pages
+    monkeypatch.setattr(grading, "load_pages", lambda path: decoded.append(path.name) or real_load_pages(path))
+    fake_llm.reply("homework_transcription", transcription(("1", "", "5", True, "clear")))
+    fake_llm.reply("homework_grading", graded(("1", "number", "", "5", "5", "5", "correct")))
+
+    grading.grade_submission(page, "S", None, task_file_paths=[sheet])
+
+    assert sorted(decoded) == ["page.jpg", "sheet.jpg"]
+
+
+def test_grader_never_sees_the_students_pages(fake_llm, page):
+    fake_llm.reply("homework_transcription", transcription(("1", "", "5", True, "clear")))
+    fake_llm.reply("homework_grading", graded(("1", "number", "", "5", "5", "5", "correct")))
+
+    grading.grade_submission(page, "S", None)
+
+    grading_call = next(c for c in fake_llm.calls if c["kind"] == "homework_grading")
+    assert not any(part.get("type") == "image_url" for part in grading_call["messages"][1]["content"])
+
+
 def test_explanations_are_requested_in_the_students_language(fake_llm, page):
     fake_llm.reply("homework_transcription", transcription(("1", "", "5", True, "clear")))
     fake_llm.reply("homework_grading", graded(("1", "number", "", "5", "5", "5", "correct")))

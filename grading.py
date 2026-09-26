@@ -119,31 +119,40 @@ TRANSCRIBE_SCHEMA = {
 
 
 def _labelled_images(group, paths, with_strips):
+    """Message parts for a set of files. Each page is decoded, encoded to a compact JPEG
+    data URL and freed before the next one is decoded: the Render instance has 512 MB,
+    and a phone photo decodes to ~36 MB of pixels. Build these once per grading and
+    share them between stages - never decode the same file per stage."""
+    encoded = []
+    for path in paths:
+        for page in load_pages(path):
+            strips = [image_to_data_url(s) for s in horizontal_strips(page, STRIPS_PER_PAGE)] if with_strips else []
+            encoded.append((image_to_data_url(page), strips))
+            page.close()
     parts = []
-    pages = [page for path in paths for page in load_pages(path)]
-    for number, page in enumerate(pages, 1):
-        parts.append({"type": "text", "text": f"{group}, page {number} of {len(pages)} (whole page):"})
-        parts.append({"type": "image_url", "image_url": {"url": image_to_data_url(page), "detail": "high"}})
-        if with_strips:
-            for index, strip in enumerate(horizontal_strips(page, STRIPS_PER_PAGE), 1):
-                parts.append({"type": "text",
-                              "text": f"{group}, page {number}, strip {index} of {STRIPS_PER_PAGE} (top to bottom):"})
-                parts.append({"type": "image_url", "image_url": {"url": image_to_data_url(strip), "detail": "high"}})
+    for number, (page_url, strip_urls) in enumerate(encoded, 1):
+        parts.append({"type": "text", "text": f"{group}, page {number} of {len(encoded)} (whole page):"})
+        parts.append({"type": "image_url", "image_url": {"url": page_url, "detail": "high"}})
+        for index, strip_url in enumerate(strip_urls, 1):
+            parts.append({"type": "text",
+                          "text": f"{group}, page {number}, strip {index} of {len(strip_urls)} (top to bottom):"})
+            parts.append({"type": "image_url", "image_url": {"url": strip_url, "detail": "high"}})
     return parts
 
 
-def transcribe(file_paths, task_file_paths, curriculum, tutor_note=None, temperature=0.0):
+def transcribe(student_parts, sheet_parts, curriculum, tutor_note=None, temperature=0.0):
+    """student_parts / sheet_parts: prebuilt _labelled_images output (sheet may be empty)."""
     content = []
-    if task_file_paths:
+    if sheet_parts:
         content.append({"type": "text", "text": "Assigned homework sheet (the problems to look for):"})
-        content += _labelled_images("Assigned sheet", task_file_paths, with_strips=False)
+        content += sheet_parts
     else:
         content.append({"type": "text", "text": "No assigned sheet was provided - use the student's own labels."})
     if tutor_note:
         content.append({"type": "text", "text": (
             "The teacher reviewed an earlier reading of these same pages and left these notes. "
             "Re-read those spots with particular care:\n" + tutor_note)})
-    content += _labelled_images("Student pages", file_paths, with_strips=True)
+    content += student_parts
 
     prompt = TRANSCRIBE_PROMPT.format(curriculum=CURRICULUM_NOTES.get(curriculum, CURRICULUM_NOTES["other"]))
     try:
@@ -361,10 +370,13 @@ def grade_submission(file_paths, student_name, topic=None, task_file_paths=None,
     """Grade a submission. known_answers maps problem labels to student answers the
     tutor already corrected by hand; those replace the AI's reading of that problem.
     Returns a dict with problems, flags_for_tutor, estimated_score, overall_summary."""
+    student_parts = _labelled_images("Student pages", file_paths, with_strips=True)
+    sheet_parts = _labelled_images("Assigned sheet", task_file_paths, with_strips=False) if task_file_paths else []
     with ThreadPoolExecutor(max_workers=2) as pool:
-        first = pool.submit(transcribe, file_paths, task_file_paths, curriculum, tutor_note, 0.0)
-        second = pool.submit(transcribe, file_paths, task_file_paths, curriculum, tutor_note, 0.7)
+        first = pool.submit(transcribe, student_parts, sheet_parts, curriculum, tutor_note, 0.0)
+        second = pool.submit(transcribe, student_parts, sheet_parts, curriculum, tutor_note, 0.7)
         primary, secondary = first.result(), second.result()
+    del student_parts, sheet_parts
 
     known = {normalize_label(label): answer for label, answer in (known_answers or {}).items()}
     flags = list(primary.get("notes", []))
