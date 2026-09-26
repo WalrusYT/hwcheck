@@ -95,7 +95,15 @@ def score_run(expected, run):
             "verdict": found["verdict"] if found else None,
             "expected_verdict": item.get("verdict"),
         })
-    return {"output_problems": len(problems), "error": run["error"], "secs": run["secs"], "items": items}
+    label_errors = []
+    if "sheet_labels" in expected:
+        allowed = {normalize_label(label) for label in expected["sheet_labels"]}
+        seen = [normalize_label(p["problem_label"]) for p in problems]
+        label_errors += [f"extra {p['problem_label']!r}" for p in problems
+                         if normalize_label(p["problem_label"]) not in allowed]
+        label_errors += [f"duplicate {label!r}" for label in sorted(allowed) if seen.count(label) > 1]
+    return {"output_problems": len(problems), "error": run["error"], "secs": run["secs"], "items": items,
+            "label_errors": label_errors}
 
 
 def summarize(expected, scored_runs):
@@ -127,6 +135,8 @@ def summarize(expected, scored_runs):
     totals["agreement"] = sum(agreement) / len(agreement) if agreement else 0.0
     totals["output_problems"] = [run["output_problems"] for run in scored_runs]
     totals["errors"] = [run["error"] for run in scored_runs if run["error"]]
+    totals["label_errors"] = [f"run {i + 1}: {', '.join(run['label_errors'])}"
+                              for i, run in enumerate(scored_runs) if run["label_errors"]]
     return totals
 
 
@@ -168,7 +178,7 @@ def main():
         print(f"\n== {case.name}  (output problems per run: {summary['output_problems']}, agreement {summary['agreement']:.0%})")
         print(f"   items found      {pct(summary['found'], summary['possible'])}  ({summary['found']}/{summary['possible']})")
         print(f"   verdict accuracy {pct(summary['verdict_ok'], summary['verdict_possible'])}")
-        for key in ("false_correct", "false_incorrect", "abstained", "missed", "errors"):
+        for key in ("false_correct", "false_incorrect", "abstained", "missed", "label_errors", "errors"):
             for entry in summary[key]:
                 print(f"   {key.upper():<16} {entry}")
 
