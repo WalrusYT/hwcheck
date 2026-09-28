@@ -38,6 +38,7 @@ STRINGS = {
         "homework.add_photos": "Add photo(s)",
         "homework.add_more": "+ Add more",
         "homework.submit": "Submit homework",
+        "homework.sending": "Sending…",
         "homework.submitted_status": "Submitted - your tutor will review it soon.",
         "homework.your_grade": "Your grade",
         "homework.tutor_comment": "Tutor's comment",
@@ -73,6 +74,8 @@ STRINGS = {
         "chat.coins_left": "{n} of {total} AI hints left for this assignment",
         "chat.limit_reached": "You've used all your AI hints for this assignment.",
         "chat.failed": "The AI helper didn't answer - your hint wasn't used. Please try again in a minute.",
+        "form.expired": "This page had been open too long, so nothing was sent. Please try again - "
+                        "if you were uploading photos, add them again.",
         "performance.title": "Your performance",
         "performance.average": "Average grade",
         "performance.no_grades": "No graded homework yet.",
@@ -125,6 +128,7 @@ STRINGS = {
         "homework.add_photos": "Добавить фото",
         "homework.add_more": "+ Добавить ещё",
         "homework.submit": "Отправить домашнее задание",
+        "homework.sending": "Отправляется…",
         "homework.submitted_status": "Отправлено - репетитор скоро проверит.",
         "homework.your_grade": "Ваша оценка",
         "homework.tutor_comment": "Комментарий репетитора",
@@ -160,6 +164,8 @@ STRINGS = {
         "chat.coins_left": "Осталось подсказок: {n} из {total}",
         "chat.limit_reached": "Вы использовали все подсказки для этого задания.",
         "chat.failed": "Помощник не ответил - подсказка не потрачена. Попробуй ещё раз через минуту.",
+        "form.expired": "Страница устарела, поэтому ничего не отправилось. Повторите попытку - "
+                        "если вы загружали фото, добавьте их заново.",
         "performance.title": "Ваша успеваемость",
         "performance.average": "Средняя оценка",
         "performance.no_grades": "Пока нет проверенных заданий.",

@@ -81,7 +81,7 @@
     <div class="form-row">
       <button type="button" id="add-files-btn" class="button-secondary">{{ t('homework.add_photos') }}</button>
     </div>
-    <button type="submit">{{ t('homework.edit_submit') if submission else t('homework.submit') }}</button>
+    <button type="submit" id="submit-files-btn">{{ t('homework.edit_submit') if submission else t('homework.submit') }}</button>
   </form>
 
   {% if submission %}
@@ -123,7 +123,7 @@
 <script src="{{ url_for('static', filename='homework_chat.js') }}"></script>
 {% endif %}
 <script>
-  initUploadWidget("file-input", "file-thumbs", "add-files-btn");
+  initUploadWidget("file-input", "file-thumbs", "add-files-btn", "submit-files-btn", {{ t('homework.sending') | tojson }});
   {% if not published %}
   initHomeworkChat({
     cardId: "chat-card",

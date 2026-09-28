@@ -5,11 +5,12 @@ import secrets
 from functools import wraps
 from urllib.parse import urlsplit
 
-from flask import abort, redirect, request, session, url_for
+from flask import abort, flash, redirect, request, session, url_for
 from markupsafe import Markup
 from werkzeug.security import check_password_hash, generate_password_hash
 
 import db
+from translations import t
 
 LOGIN_WINDOW_MINUTES = 15
 MAX_FAILED_LOGINS = {"admin": 5, "student": 10}
@@ -127,4 +128,11 @@ def verify_csrf():
     sent = request.form.get("csrf_token") or request.headers.get("X-CSRF-Token") or ""
     expected = session.get("_csrf") or ""
     if not expected or not secrets.compare_digest(sent, expected):
+        # Usually a page left open across a deploy or a logout, not an attack: send a
+        # form back to its own page (which re-issues a token, or asks to log in) with a
+        # message in the viewer's language. fetch() callers get a 400 they handle.
+        back = safe_next_url(request.path, None) if request.url_rule is not None else None
+        if back and not request.is_json and "X-CSRF-Token" not in request.headers:
+            flash(t("form.expired"))
+            return redirect(back)
         abort(400, description="csrf")
