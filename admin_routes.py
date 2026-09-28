@@ -628,15 +628,14 @@ def regrade_submission(submission_id):
         if note:
             label = request.form.get(f"problem_label_{i}") or f"#{i + 1}"
             notes.append(f"Problem {label}: {note}")
-    tutor_note = "\n".join(notes)
-    if not tutor_note:
-        conn.close()
-        flash("Add a note on at least one task before asking for a recheck.")
-        return redirect(url_for("admin.submission_detail", submission_id=submission_id))
+    # Every recheck re-grades the whole submission; notes only point the AI at tasks the
+    # tutor thinks it got wrong. All notes blank = a plain full re-grade.
+    tutor_note = "\n".join(notes) or None
 
     _start_grading(conn, submission, tutor_note=tutor_note, reset_tutor_result=True)
     conn.close()
-    flash("AI is rechecking the submission in the background - this page will update automatically when it's done.")
+    flash("AI is rechecking the whole submission" + (" with your notes" if tutor_note else "")
+          + " in the background - this page will update automatically when it's done.")
     return redirect(url_for("admin.submission_detail", submission_id=submission_id))
 
 

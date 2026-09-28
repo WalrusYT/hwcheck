@@ -108,3 +108,19 @@ def test_recheck_keeps_student_answers_the_tutor_corrected(monkeypatch, admin):
          {"problem_count": "1", "problem_label_0": "1", "ai_note_0": "misread"})
 
     assert started["known_answers"] == {"1": "x=3"}
+
+
+def test_recheck_with_every_note_blank_regrades_the_whole_submission(monkeypatch, admin):
+    """Blank notes used to refuse the recheck ("add a note first"); the tutor wants a
+    plain full re-grade, e.g. after the grading pipeline improved."""
+    student_id = make_student()
+    submission_id = make_submission(make_assignment(student_id), student_id, ai_status="done",
+                                    ai_result=json.dumps({"problems": []}))
+    started = {}
+    import grading_jobs
+    monkeypatch.setattr(grading_jobs, "start_grading_job", lambda *a, **k: started.update(k))
+
+    post(admin, f"/admin/submissions/{submission_id}/regrade",
+         {"problem_count": "2", "problem_label_0": "1", "ai_note_0": "  ", "problem_label_1": "2", "ai_note_1": ""})
+
+    assert started and started["tutor_note"] is None and started["reset_tutor_result"] is True
