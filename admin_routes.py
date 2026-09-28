@@ -27,7 +27,6 @@ import grading_jobs
 import notifications
 import performance
 import translations
-import performance_pdf
 from auth import (
     admin_required,
     clear_failed_logins,
@@ -433,6 +432,8 @@ def student_performance_pdf(student_id):
         {"title": r["assignment_title"], "submitted_at": r["reviewed_at"] or r["submitted_at"], "grade": r["tutor_grade"]}
         for r in history
     ]
+    import performance_pdf  # PyMuPDF: loaded on first report, not at app start (512 MB instance)
+
     pdf_bytes = performance_pdf.build_performance_pdf(
         student["name"], letter, gpa, history_data, student["performance_narrative"]
     )

@@ -14,11 +14,9 @@ The result is a draft for the tutor to review - never published directly.
 import json
 import os
 import re
-from concurrent.futures import ThreadPoolExecutor
-
 import llm
-import math_check
-from image_utils import file_to_image_data_urls, horizontal_strips, image_to_data_url, load_pages
+from image_utils import (file_to_image_data_urls, fit_like_openai_high_detail, horizontal_strips,
+                         image_to_data_url, load_pages)
 
 MODEL = llm.DEFAULT_MODEL
 TRANSCRIBE_MODEL = os.environ.get("OPENAI_TRANSCRIBE_MODEL") or MODEL
@@ -142,8 +140,13 @@ def _labelled_images(group, paths, with_strips):
     encoded = []
     for path in paths:
         for page in load_pages(path):
-            strips = [image_to_data_url(s) for s in horizontal_strips(page, STRIPS_PER_PAGE)] if with_strips else []
-            encoded.append((image_to_data_url(page), strips))
+            # Student pages go only to the reading stage. gpt-4o downsizes every image to
+            # 768 px on the short side anyway, so sending more just costs server memory;
+            # other models (e.g. gpt-5.5) may read finer detail, so they get the full size.
+            shrink = fit_like_openai_high_detail if with_strips and TRANSCRIBE_MODEL.startswith("gpt-4o") else None
+            strips = ([image_to_data_url(shrink(s) if shrink else s) for s in horizontal_strips(page, STRIPS_PER_PAGE)]
+                      if with_strips else [])
+            encoded.append((image_to_data_url(shrink(page) if shrink else page), strips))
             page.close()
     parts = []
     for number, (page_url, strip_urls) in enumerate(encoded, 1):
@@ -413,6 +416,7 @@ def grade_transcription(problems, student_name, topic, curriculum, language, she
 
 def apply_exact_check(problem, graded, flags):
     """Let sympy overrule the model's verdict where the math can be checked exactly."""
+    import math_check  # sympy is ~30 MB: load it in the worker that grades, not at app import
     if problem["verdict"] in ("not_attempted", "unclear"):
         return
     result = math_check.check(graded["answer_kind"], graded["problem_expr"],
@@ -451,10 +455,11 @@ def grade_submission(file_paths, student_name, topic=None, task_file_paths=None,
     Returns a dict with problems, flags_for_tutor, estimated_score, overall_summary."""
     student_parts = _labelled_images("Student pages", file_paths, with_strips=True)
     sheet_parts = _labelled_images("Assigned sheet", task_file_paths, with_strips=False) if task_file_paths else []
-    with ThreadPoolExecutor(max_workers=2) as pool:
-        first = pool.submit(transcribe, student_parts, sheet_parts, curriculum, tutor_note, 0.0)
-        second = pool.submit(transcribe, student_parts, sheet_parts, curriculum, tutor_note, 0.7)
-        primary, secondary = first.result(), second.result()
+    # One after the other, not in parallel: each request holds a copy of every page while
+    # it is sent, and two at once ran the 512 MB Render instance out of memory. Grading
+    # runs in the background, so the extra ~30 s costs nobody a wait at the screen.
+    primary = transcribe(student_parts, sheet_parts, curriculum, tutor_note, 0.0)
+    secondary = transcribe(student_parts, sheet_parts, curriculum, tutor_note, 0.7)
     del student_parts  # the grading stage never sees the student's pages
 
     known = {normalize_label(label): answer for label, answer in (known_answers or {}).items()}

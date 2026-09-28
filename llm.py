@@ -7,8 +7,6 @@ can replace complete() without touching the network.
 
 import os
 
-from openai import OpenAI
-
 DEFAULT_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o")
 
 
@@ -22,6 +20,10 @@ _client = None
 def _get_client():
     global _client
     if _client is None:
+        # Imported here, not at module level: the SDK costs ~20 MB, and gunicorn's
+        # master imports the app too - on a 512 MB instance every copy counts.
+        from openai import OpenAI
+
         # The account's per-minute token limit is low (30k TPM on gpt-4o), and one
         # grading uses ~12k tokens, so two students submitting together hit 429s.
         # The SDK backs off using the server's retry-after hint; the default of 2

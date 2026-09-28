@@ -4,10 +4,17 @@ import base64
 import io
 
 import pillow_heif
-import pymupdf as fitz
 from PIL import Image
 
 pillow_heif.register_heif_opener()
+
+
+def _fitz():
+    # PyMuPDF costs ~25 MB, and gunicorn's master imports the app too: load it on
+    # first use in the worker instead of in every process at startup (512 MB box).
+    import pymupdf
+
+    return pymupdf
 
 HEIC_EXTS = {".heic", ".heif"}
 PASSTHROUGH_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
@@ -28,7 +35,7 @@ def _scaled_pdf_pixmap(page):
     longest_pt = max(page.rect.width, page.rect.height)
     if longest_pt * zoom > MAX_DIM:
         zoom = MAX_DIM / longest_pt
-    return page.get_pixmap(matrix=fitz.Matrix(zoom, zoom))
+    return page.get_pixmap(matrix=_fitz().Matrix(zoom, zoom))
 
 
 def _load_capped(file_path, ext):
@@ -56,6 +63,7 @@ def load_pages(file_path):
     """Yield decoded RGB page images (one per PDF page, one for a photo), capped at
     MAX_DIM - one at a time, so a many-page upload never sits in memory all at once."""
     if file_path.suffix.lower() == ".pdf":
+        fitz = _fitz()
         doc = fitz.open(file_path)
         try:
             for page in doc:
@@ -73,6 +81,19 @@ def image_to_data_url(img):
     buf = io.BytesIO()
     img.save(buf, format="JPEG", quality=90)
     return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode("utf-8")
+
+
+def fit_like_openai_high_detail(img):
+    """Resize the way OpenAI's gpt-4o preprocesses a "high" detail image: fit within
+    2048x2048, then shrink so the short side is at most 768 px. The model sees the
+    same pixels; the request is several times smaller, which matters on a 512 MB
+    server holding a multi-photo submission in memory while the request is sent."""
+    fit_box = min(1.0, 2048 / max(img.size))
+    short_side = min(1.0, 768 / (min(img.size) * fit_box))
+    scale = fit_box * short_side
+    if scale >= 1.0:
+        return img
+    return img.resize((max(1, round(img.width * scale)), max(1, round(img.height * scale))), Image.LANCZOS)
 
 
 def horizontal_strips(img, count=3, overlap=0.12):
@@ -94,7 +115,7 @@ def file_to_image_data_urls(file_path):
     ext = file_path.suffix.lower()
     urls = []
     if ext == ".pdf":
-        doc = fitz.open(file_path)
+        doc = _fitz().open(file_path)
         try:
             for page in doc:
                 pix = _scaled_pdf_pixmap(page)
