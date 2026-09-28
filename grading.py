@@ -194,7 +194,10 @@ def normalize_label(label):
     return re.sub(r"[\s№()q]|n°|ex", "", label)
 
 
-_CROSSED_OUT = re.compile(r"\\(?:x?cancel|sout|st|bcancel)\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}")
+_CROSSED_OUT = re.compile(
+    r"\\(?:x?cancel|sout|st|bcancel)\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}"      # \cancel{...}
+    r"|\[?\s*\\text\{[^{}]*(?:crossed|struck|scribbl)[^{}]*\}\s*\]?",     # [\text{crossed out}]
+    re.IGNORECASE)
 _EMPTY_SET = re.compile(r"\\varnothing|\\emptyset|\\O\b|[∅Øø]")
 
 
@@ -218,8 +221,8 @@ _PART_NAME_NOISE = re.compile(r"\\(?:text|mathrm|operatorname)\b|[\\{}\s]")
 
 
 def _answer_parts(text):
-    """{part name: normalized value} for a multi-part answer like "inf = 1; sup = 2",
-    or None when the answer isn't in that shape."""
+    """{part name: (normalized value, value as written)} for a multi-part answer like
+    "inf = 1; sup = 2", or None when the answer isn't in that shape."""
     text = re.sub(r"\\[()\[\]]", "", text or "")
     parts = {}
     # split only at a ";" that starts a new "name =" - intervals are written (a; b) too
@@ -229,7 +232,7 @@ def _answer_parts(text):
             return None
         name = _PART_NAME_NOISE.sub("", name.replace("\\ell", "l"))
         # "l" and "L" are different parts (lower / upper bounds); "Inf" and "inf" are not
-        parts[name if len(name) == 1 else name.lower()] = normalize_answer(value)
+        parts[name if len(name) == 1 else name.lower()] = (normalize_answer(value), value.strip())
     return parts if len(parts) > 1 else None
 
 
@@ -242,8 +245,24 @@ def _readings_agree(first, second):
         # One reading often lists more of the requested parts than the other; what
         # matters is that no part both readings saw was read differently.
         shared = parts_a.keys() & parts_b.keys()
-        return bool(shared) and all(parts_a[k] == parts_b[k] for k in shared)
+        return bool(shared) and all(parts_a[k][0] == parts_b[k][0] for k in shared)
     return normalize_answer(a) == normalize_answer(b)
+
+
+def _parts_read_two_ways(a, b):
+    """For two multi-part readings that agree on some parts but not all:
+    {part: (as read first, as read second)} for the parts they differ on. None when
+    they aren't both multi-part or agree on nothing (then it's not the same answer)."""
+    parts_a, parts_b = _answer_parts(a), _answer_parts(b)
+    if not (parts_a and parts_b):
+        return None
+    shared = parts_a.keys() & parts_b.keys()
+    differing = {k: (parts_a[k][1], parts_b[k][1]) for k in shared if parts_a[k][0] != parts_b[k][0]}
+    return differing if differing and len(differing) < len(shared) else None
+
+
+def _short(value, limit=30):
+    return value if len(value) <= limit else value[:limit - 1] + "…"
 
 
 def reconcile(primary, secondary):
@@ -262,8 +281,18 @@ def reconcile(primary, secondary):
             note = (None if not problem["found"] else
                     f"{problem['label']}: only one of two independent readings found this problem")
         elif not _readings_agree(problem, other):
-            note = (f"{problem['label']}: two readings disagree - "
-                    f"“{problem['student_final_answer']}” vs “{other['student_final_answer']}”")
+            split = _parts_read_two_ways(problem["student_final_answer"], other["student_final_answer"])
+            if split:
+                # Students who cross out and rewrite get one part read two ways; the rest of
+                # the answer is still clear, so grade it and let the tutor settle that part.
+                fuller = max((problem, other), key=lambda p: len(_answer_parts(p["student_final_answer"])))
+                problem = {**problem, "student_final_answer": fuller["student_final_answer"],
+                           "read_two_ways": "; ".join(f"{k}: {a} / {b}" for k, (a, b) in split.items())}
+                note = (f"{problem['label']}: the photo reads two ways for "
+                        + ", ".join(f"{k} (“{_short(a)}” vs “{_short(b)}”)" for k, (a, b) in split.items()))
+            else:
+                note = (f"{problem['label']}: two readings disagree - "
+                        f"“{problem['student_final_answer']}” vs “{other['student_final_answer']}”")
         else:
             note = None
             ours, theirs = _answer_parts(problem["student_final_answer"]), _answer_parts(other["student_final_answer"])
@@ -322,6 +351,10 @@ use an empty string when not applicable:
   correct_expr and student_expr: the final answers in that syntax (for \
 equations, the solutions separated by commas; for choices, the letters);
   answer_kind: expression, equation, number, choice, true_false, proof or text.
+- read_two_ways (only on some problems) lists parts of the answer that two \
+independent readings of the photo saw differently, as "part: reading 1 / \
+reading 2". Do not count those parts against the student; judge the rest. If \
+the verdict depends only on such a part, use verdict "unclear".
 - Never let a placeholder such as "0" stand in for an answer you did not work \
 out. If you cannot solve a problem after real effort, use verdict "unclear" \
 and confidence "low".
@@ -378,6 +411,7 @@ def grade_transcription(problems, student_name, topic, curriculum, language, she
         "label": p["label"], "problem_text": p["problem_text"], "found": p["found"],
         "student_work": p["student_work"], "student_final_answer": p["student_final_answer"],
         "legibility": p["legibility"],
+        **({"read_two_ways": p["read_two_ways"]} if p.get("read_two_ways") else {}),
     } for p in problems]
     content = [{"type": "text", "text": (
         f"Student: {student_name}\nHomework topic: {topic or '(none given)'}\n\n"
@@ -472,7 +506,8 @@ def grade_submission(file_paths, student_name, topic=None, task_file_paths=None,
             problem = {**problem, "student_final_answer": corrected, "found": bool(corrected), "legibility": "clear"}
         elif disagreement:
             flags.append(disagreement + " - please check the photo.")
-            disputed.add(problem["label"])
+            if not problem.get("read_two_ways"):  # only some parts unclear: still graded
+                disputed.add(problem["label"])
         transcribed.append(problem)
 
     # Blank problems are "not attempted" by definition - sending them to the grader only
@@ -506,6 +541,8 @@ def grade_submission(file_paths, student_name, topic=None, task_file_paths=None,
             problem.update(verdict="unclear", confidence="low", explanation="")
         elif g:
             apply_exact_check(problem, g, flags)
+            if t.get("read_two_ways"):
+                problem["confidence"] = "low"
         problems.append(problem)
 
     if not task_file_paths:

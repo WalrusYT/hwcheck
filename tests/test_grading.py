@@ -206,7 +206,32 @@ def test_part_names_match_across_latex_wrapping():
 def test_a_shared_part_that_differs_is_still_a_disagreement():
     [(_, note)] = grading.reconcile(transcription(("8b", "", "inf = -1; sup = 1", True, "clear")),
                                     transcription(("8b", "", "inf = -1; sup = 1/2; max = 1/2", True, "clear")))
-    assert note and "disagree" in note
+    assert note and "sup" in note
+
+
+def test_one_unclear_part_does_not_throw_away_the_whole_problem(fake_llm, page):
+    """A student who crosses out and rewrites got every multi-part problem marked
+    "unclear" because the two readings rendered one struck-out part differently."""
+    fake_llm.reply("homework_transcription",
+                   transcription(("8b", "", "l = (-\\infty;-1]; L = [1;+\\infty); sup = 1; max = 1", True, "clear")),
+                   transcription(("8b", "", "l = (-\\infty;-1]; L = (1;+\\infty); sup = 1; max = 1", True, "clear")))
+    fake_llm.reply("homework_grading", graded(("8b", "text", "", "", "", "sup = 1/2", "partially_correct")))
+
+    result = grading.grade_submission(page, "S", None, task_file_paths=page)
+
+    problem = result["problems"][0]
+    assert problem["verdict"] == "partially_correct" and problem["confidence"] == "low"
+    [flag] = [f for f in result["flags_for_tutor"] if f.startswith("8b")]
+    assert "L" in flag and "sup" not in flag and len(flag) < 160
+    sent = json.dumps(next(c for c in fake_llm.calls if c["kind"] == "homework_grading")["messages"])
+    assert "read_two_ways" in sent and "L: [1;+" in sent and "/ (1;+" in sent
+
+
+def test_crossed_out_markers_in_any_spelling_are_ignored():
+    for struck in ("\\cancel{\\varnothing} 1", "[\\text{crossed out}] 1", "\\sout{0} 1"):
+        [(_, note)] = grading.reconcile(transcription(("8a", "", f"inf = 0; max = {struck}", True, "clear")),
+                                        transcription(("8a", "", "inf = 0; max = 1", True, "clear")))
+        assert note is None, struck
 
 
 def test_a_blank_problem_missing_from_the_other_reading_is_not_flagged():
