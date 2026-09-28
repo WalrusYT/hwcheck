@@ -119,6 +119,105 @@ def test_reading_pass_never_sees_the_answer_key(fake_llm, page, tmp_path):
     assert "answer key" in json.dumps(grading_call["messages"]).lower()
 
 
+def test_grader_sees_the_printed_sheet_not_only_the_readers_copy_of_it(fake_llm, page, tmp_path):
+    """The reader copied a multiple-choice question without its options a)-d), so the
+    grader saw the answer "c" with no idea what c was and marked a right answer wrong."""
+    sheet = tmp_path / "sheet.jpg"
+    Image.new("RGB", (300, 400), "white").save(sheet)
+    fake_llm.reply("homework_transcription", transcription(("9", "Qual dos seguintes números está entre 0,4 e 0,3?",
+                                                            "c", True, "clear")))
+    fake_llm.reply("homework_grading", graded(("9", "choice", "", "c", "c", "c", "correct")))
+
+    grading.grade_submission(page, "S", None, task_file_paths=[sheet])
+
+    grading_call = next(c for c in fake_llm.calls if c["kind"] == "homework_grading")
+    content = grading_call["messages"][1]["content"]
+    assert any(part.get("type") == "image_url" for part in content)
+    assert "assigned homework sheet" in json.dumps(content).lower()
+
+
+def test_empty_set_spellings_and_crossed_out_marks_are_one_reading(fake_llm, page):
+    """\\emptyset vs \\varnothing (and a crossed-out ∅ next to the real answer) made five
+    of a student's answers "unclear" although both readings said the same thing."""
+    fake_llm.reply("homework_transcription",
+                   transcription(("8a", "", "\\(max=1\\)", True, "clear"),
+                                 ("8c", "", "\\(max=\\emptyset\\)", True, "clear")),
+                   transcription(("(8)a)", "", "\\(max=\\cancel{\\varnothing}\\;1\\)", True, "clear"),
+                                 ("(8)c)", "", "\\(max=\\varnothing\\)", True, "clear")))
+    fake_llm.reply("homework_grading", graded(("8a", "text", "", "", "", "1", "correct"),
+                                              ("8c", "text", "", "", "", "none", "correct")))
+
+    result = grading.grade_submission(page, "S", None, task_file_paths=page)
+
+    assert [p["verdict"] for p in result["problems"]] == ["correct", "correct"]
+    assert not any("disagree" in flag for flag in result["flags_for_tutor"])
+
+
+def test_disagreement_flag_shows_the_latex_as_written():
+    """repr() doubled every backslash, so the tutor saw '\\\\(x=4\\\\)' instead of math."""
+    paired = grading.reconcile(transcription(("1", "", "\\(x=4\\)", True, "clear")),
+                               transcription(("1", "", "\\(x=1\\)", True, "clear")))
+    note = paired[0][1]
+    assert "\\(x=4\\)" in note and "\\(x=1\\)" in note and "\\\\" not in note
+
+
+def test_unanswered_problems_are_not_sent_to_the_grader(fake_llm, page):
+    """The grader used to receive blank problems and invent "no problem statement was
+    available" for them, and the summary blamed that for them being unanswered."""
+    fake_llm.reply("homework_transcription", transcription(("8a", "", "1", True, "clear"),
+                                                           ("12", "", "", False, "clear")))
+    fake_llm.reply("homework_grading", graded(("8a", "number", "", "1", "1", "1", "correct")))
+
+    result = grading.grade_submission(page, "S", None, task_file_paths=page)
+
+    grading_call = next(c for c in fake_llm.calls if c["kind"] == "homework_grading")
+    assert '"12"' not in json.dumps(grading_call["messages"])
+    assert [p["verdict"] for p in result["problems"]] == ["correct", "not_attempted"]
+    assert result["estimated_score"] == "1 of 1 answered problems correct; 1 not attempted"
+
+
+def test_nothing_to_grade_skips_the_grader(fake_llm, page):
+    fake_llm.reply("homework_transcription", transcription(("12", "", "", False, "clear")))
+
+    result = grading.grade_submission(page, "S", None, task_file_paths=page)
+
+    assert not any(c["kind"] == "homework_grading" for c in fake_llm.calls)
+    assert result["problems"][0]["verdict"] == "not_attempted"
+
+
+def test_multi_part_readings_are_compared_part_by_part():
+    """One reading listed inf/sup/min/max, the other also the interior and limit points
+    and wrote \\inf for inf - the same answer, but every such problem became "unclear"."""
+    short = transcription(("9b", "", "inf = 5 ; sup = 15 ; min = \\varnothing ; max = 15", True, "clear"))
+    full = transcription(("9b", "", "Int = [5,7]; \\text{limit points} = \\{15\\}; \\inf = 5; \\sup = 15; "
+                                    "\\min = \\emptyset; \\max = 15", True, "clear"))
+    [(problem, note)] = grading.reconcile(short, full)
+    assert note is None
+    assert "limit points" in problem["student_final_answer"]  # the fuller reading is the one graded
+
+
+def test_part_names_match_across_latex_wrapping():
+    [(_, note)] = grading.reconcile(
+        transcription(("8b", "", "\\(l=(-\\infty;-1]\\); \\(L=[1;+\\infty)\\)", True, "clear")),
+        transcription(("8b", "", "\\ell = (-\\infty;-1]; L = [1;+\\infty)", True, "clear")))
+    assert note is None
+
+
+def test_a_shared_part_that_differs_is_still_a_disagreement():
+    [(_, note)] = grading.reconcile(transcription(("8b", "", "inf = -1; sup = 1", True, "clear")),
+                                    transcription(("8b", "", "inf = -1; sup = 1/2; max = 1/2", True, "clear")))
+    assert note and "disagree" in note
+
+
+def test_a_blank_problem_missing_from_the_other_reading_is_not_flagged():
+    [(_, note)] = grading.reconcile(transcription(("12", "", "", False, "clear")), transcription())
+    assert note is None
+
+
+def test_bracketed_labels_match_plain_ones():
+    assert grading.normalize_label("(8)a)") == grading.normalize_label("8a") == grading.normalize_label("8 a)")
+
+
 def test_each_file_is_decoded_once_per_grading(fake_llm, page, tmp_path, monkeypatch):
     """Both readings and the grader used to decode the same photo and sheet separately,
     at the same time - enough to push a 512 MB Render instance over its memory limit."""

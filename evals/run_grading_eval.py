@@ -45,7 +45,8 @@ def normalize(text, *, ci=False, alnum=False):
 
 
 def normalize_label(label):
-    return re.sub(r"[\s№)q]", "", (label or "").lower())
+    # independent of grading.normalize_label, so a baseline run of older code is scored the same way
+    return re.sub(r"[\s№()q]", "", (label or "").lower())
 
 
 def match_item(item, problems):

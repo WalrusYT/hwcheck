@@ -88,6 +88,21 @@ Goal order: 0 false correct, then 0 false incorrect, then fewer abstentions.
 | two-stage gpt-4o | ~40% | 0 | 0 (mostly abstained) |
 | two-stage gpt-5.5 | 78% | 0 | 0 after the no-sheet rule (7 before) |
 
+2026-09-28, 4 real cases (2 with a sheet) x 2 runs, after part-by-part
+reconciliation and multi-part grading:
+
+| models (transcribe / grade) | uni topology (sheet) | PT dízimas (sheet) | no-sheet cases | false correct / incorrect |
+|---|---|---|---|---|
+| live code, gpt-4o / gpt-4o | 0% verdicts (all unclear) | 78% | ~40% found | 0 / 1 |
+| gpt-4o / gpt-4o | 54% | - | - | 1 / 0 |
+| **gpt-4o / gpt-5.5** | **85-90%** | **100%** | 50% / 35% found | **0 / 0** |
+| gpt-5.5 / gpt-5.5 | 65% (readings disagree more) | - | 78% found (09-26) | 0 / 0 |
+
+gpt-4o's own answer key was wrong on university analysis (sup/max of
+(-1)^n/n, max of 1/n+1/m, min/max of [2,3]∩Q); gpt-5.5 got every part right.
+Multi-part answers must be transcribed in full ("inf = ..; sup = ..") - the
+last line alone made both readings and the verdicts meaningless.
+
 With no task sheet the problem is only inferred from the student's work, so
 the no-sheet rule turns non-correct verdicts into `unclear`. Cases with the
 real sheet attached are the biggest missing piece of this eval set - add them.

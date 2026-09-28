@@ -40,7 +40,8 @@ Production facts:
   not raise `--workers` without moving jobs to a real queue first.
 - Env vars: `OPENAI_API_KEY`, `ADMIN_PASSWORD` (>= 12 chars), `FLASK_SECRET_KEY`,
   `OPENAI_MODEL` (default model, gpt-4o), optional `OPENAI_TRANSCRIBE_MODEL` /
-  `OPENAI_GRADE_MODEL` (per grading stage). A past outage came from an
+  `OPENAI_GRADE_MODEL` (per grading stage; evals favour gpt-4o reading +
+  `OPENAI_GRADE_MODEL=gpt-5.5` - gpt-4o gets university-level answers wrong). A past outage came from an
   `OPENAI_API_KEY` value with an embedded newline: inspect env vars by
   length/whitespace, never print them. Env changes need a new deploy to apply.
 - Render MCP tools, when loaded, are for read-only inspection (logs, deploys,
