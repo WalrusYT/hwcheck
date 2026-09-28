@@ -46,7 +46,7 @@ evals/cases/grading/<case-id>/
 
 ```json
 {
-  "student_name": "Boris", "topic": "...", "curriculum": "ru", "language": "ru",
+  "student_name": "Student", "topic": "...", "curriculum": "ru", "language": "ru",
   "items": [
     {"id": "63a", "answer": ["x-5", "y-1"], "verdict": "correct"},
     {"id": "63g", "context": ["5p", "10q"], "answer": ["-5"], "verdict": "correct"},

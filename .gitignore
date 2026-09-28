@@ -1,9 +1,19 @@
+# secrets
 .env
-__pycache__/
-*.pyc
+.env.*
+!.env.example
+
+# real student data - never commit
 hwcheck.db
+hwcheck.db-*
+*.sqlite
 uploads/
 evals/cases/
 evals/results/
+
+# local tooling
+__pycache__/
+*.pyc
 .idea/
-server.log
+.claude/settings.local.json
+*.log
