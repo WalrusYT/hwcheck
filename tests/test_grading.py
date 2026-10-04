@@ -47,6 +47,21 @@ def test_answer_key_that_is_wrong_gets_replaced(fake_llm, page):
     assert any("answer key was wrong" in flag for flag in result["flags_for_tutor"])
 
 
+def test_an_explanation_built_on_a_wrong_key_is_not_shown_to_the_student(fake_llm, page):
+    """gpt-4o told the student "the correct value of m is -1" for an equation whose
+    solution is 0; the verdict (incorrect) was right, the explanation was not."""
+    fake_llm.reply("homework_transcription",
+                   transcription(("6", "4(2m-1)+3m=2(4m-1)-(2-m)", "m=0,4", True, "clear")))
+    fake_llm.reply("homework_grading", graded(
+        ("6", "equation", "4(2m-1)+3m = 2(4m-1)-(2-m)", "-1", "0.4", "-1", "incorrect")))
+
+    result = grading.grade_submission(page, "S", None, task_file_paths=page)
+
+    problem = result["problems"][0]
+    assert (problem["verdict"], problem["correct_answer"], problem["explanation"]) == ("incorrect", "\\(0\\)", "")
+    assert any("answer key was wrong" in flag and "explanation" in flag for flag in result["flags_for_tutor"])
+
+
 def test_exact_check_overrules_a_false_correct(fake_llm, page):
     fake_llm.reply("homework_transcription", transcription(("1", "2x+1=7", "x=4", True, "clear")))
     fake_llm.reply("homework_grading", graded(("1", "equation", "2*x+1=7", "3", "4", "3", "correct")))
@@ -237,6 +252,82 @@ def test_crossed_out_markers_in_any_spelling_are_ignored():
 def test_a_blank_problem_missing_from_the_other_reading_is_not_flagged():
     [(_, note)] = grading.reconcile(transcription(("12", "", "", False, "clear")), transcription())
     assert note is None
+
+
+def test_unnumbered_problems_are_each_read_and_graded_on_their_own(fake_llm, page):
+    """A sheet whose first equations carry no numbers: every problem had the label "",
+    so all of them were compared with - and graded as - the last one ("x=2 vs x=7")."""
+    reading = transcription(("", "2x-2=12-5x", "x=2", True, "clear"),
+                            ("", "7y-10=y+50", "y=10", True, "clear"),
+                            ("", "2(x-1)+3(x+1)=4(x+2)", "x=7", True, "clear"),
+                            ("b)", "x/3=5", "x=15", True, "clear"))
+    fake_llm.reply("homework_transcription", reading)
+    fake_llm.reply("homework_grading", graded(
+        ("#1", "equation", "2*x-2=12-5*x", "2", "2", "x=2", "correct"),
+        ("#2", "equation", "7*y-10=y+50", "10", "10", "y=10", "correct"),
+        ("#3", "equation", "2*(x-1)+3*(x+1)=4*(x+2)", "7", "7", "x=7", "correct"),
+        ("b)", "equation", "x/3=5", "15", "15", "x=15", "correct")))
+
+    result = grading.grade_submission(page, "S", None, task_file_paths=page)
+
+    assert [p["problem_label"] for p in result["problems"]] == ["#1", "#2", "#3", "b)"]
+    assert [p["verdict"] for p in result["problems"]] == ["correct"] * 4
+    assert [p["student_answer"] for p in result["problems"]] == ["x=2", "y=10", "x=7", "x=15"]
+    assert not any("disagree" in flag for flag in result["flags_for_tutor"])
+    sent = json.dumps(next(c for c in fake_llm.calls if c["kind"] == "homework_grading")["messages"])
+    assert "#1" in sent and "#3" in sent
+
+
+@pytest.mark.parametrize("label, cleaned", [
+    ("2x - 2 = 12 - 5x", ""),                     # the model used the equation as the label
+    ("\\(7y - 10 = y + 50\\)", ""),
+    ("b) \\frac{x}{3} = 5", "b)"),                # letter + the equation: keep the letter
+    ("(8) a)", "(8) a)"), ("9a", "9a"), ("10.2", "10.2"), ("№58 а)", "№58 а)"), ("", ""), ("?", ""),
+])
+def test_a_label_is_only_the_printed_number_or_letter(label, cleaned):
+    assert grading.clean_label(label) == cleaned
+
+
+def test_equations_used_as_labels_are_numbered_like_unlabelled_problems(fake_llm, page):
+    fake_llm.reply("homework_transcription",
+                   transcription(("2x - 2 = 12 - 5x", "2x-2=12-5x", "x=2", True, "clear"),
+                                 ("b) \\frac{x}{3} = 5", "x/3=5", "x=15", True, "clear")),
+                   transcription(("", "2x-2=12-5x", "x=2", True, "clear"),
+                                 ("b)", "x/3=5", "x=15", True, "clear")))
+    fake_llm.reply("homework_grading", graded(("#1", "equation", "2*x-2=12-5*x", "2", "2", "x=2", "correct"),
+                                              ("b)", "equation", "x/3=5", "15", "15", "x=15", "correct")))
+
+    result = grading.grade_submission(page, "S", None, task_file_paths=page)
+
+    assert [p["problem_label"] for p in result["problems"]] == ["#1", "b)"]
+    assert not any("disagree" in f or "only one" in f for f in result["flags_for_tutor"])
+
+
+def test_unnumbered_problems_are_paired_by_their_text_even_in_another_order():
+    first = transcription(("", "2x-2=12-5x", "x=2", True, "clear"), ("", "7y-10=y+50", "y=10", True, "clear"))
+    second = transcription(("", "7y - 10 = y + 50", "y=10", True, "clear"), ("", "2x - 2 = 12 - 5x", "x=2", True, "clear"))
+    assert [note for _, note in grading.reconcile(first, second)] == [None, None]
+
+
+def test_repeated_labels_do_not_collide_either(fake_llm, page):
+    reading = transcription(("a)", "x+1=2", "x=1", True, "clear"), ("a)", "x+2=5", "x=3", True, "clear"))
+    fake_llm.reply("homework_transcription", reading)
+    fake_llm.reply("homework_grading", graded(("a) #1", "equation", "x+1=2", "1", "1", "1", "correct"),
+                                              ("a) #2", "equation", "x+2=5", "3", "3", "3", "correct")))
+
+    result = grading.grade_submission(page, "S", None, task_file_paths=page)
+
+    assert [p["problem_label"] for p in result["problems"]] == ["a) #1", "a) #2"]
+    assert [p["verdict"] for p in result["problems"]] == ["correct", "correct"]
+
+
+def test_a_misread_variable_letter_is_not_a_disagreement():
+    """Handwritten m read once as x: "x = 0,4" vs "m = 0,4" is the same answer."""
+    [(_, same)] = grading.reconcile(transcription(("6", "", "\\(x = 0,4\\)", True, "clear")),
+                                    transcription(("6", "", "m = 0,4", True, "clear")))
+    [(_, different)] = grading.reconcile(transcription(("6", "", "x = 0,4", True, "clear")),
+                                         transcription(("6", "", "x = -0,4", True, "clear")))
+    assert same is None and different is not None
 
 
 def test_bracketed_labels_match_plain_ones():

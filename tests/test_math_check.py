@@ -38,6 +38,23 @@ def test_multiple_choice_and_true_false():
     assert tf.student_matches is True
 
 
+def test_equations_written_the_way_people_write_them_are_checked():
+    # Real case: the model wrote 4(2m-1)+3m, the parser wanted 4*(2*m-1)+3*m, the check was
+    # silently skipped and gpt-4o's wrong key (-1) reached the tutor. The true solution is 0.
+    result = math_check.check("equation", "4(2m-1)+3m = 2(4m-1)-(2-m)", "-1", "0.4")
+    assert (result.reference_latex, result.key_matches, result.student_matches) == ("0", False, False)
+    assert math_check.equivalent(math_check.parse("3(x+1)+2(2x-3)"), math_check.parse("7*x-3")) is True
+
+
+def test_a_decimal_comma_is_one_number_not_two_solutions():
+    # Portuguese and Russian students write 2,5 - it was read as the solutions 2 and 5.
+    assert math_check.check("equation", "2*x=5", "2.5", "x=2,5").student_matches is True
+    assert math_check.check("equation", "5*m=-2", "-0.4", "0,4").student_matches is False
+    assert math_check.check("number", "1/4+1/4", "0.5", "0,5").student_matches is True
+    # ...while "2,3" for a quadratic still means two solutions
+    assert math_check.check("equation", "x^2-5*x+6=0", "2, 3", "2,3").student_matches is True
+
+
 def test_unparseable_input_gives_no_opinion():
     assert math_check.check("expression", "\\frac{x}{y}", "", "").student_matches is None
     assert math_check.check("proof", "", "", "").student_matches is None

@@ -9,7 +9,8 @@ from dataclasses import dataclass
 from typing import Optional
 
 import sympy
-from sympy.parsing.sympy_parser import convert_xor, parse_expr, standard_transformations
+from sympy.parsing.sympy_parser import (convert_xor, implicit_multiplication, parse_expr,
+                                        standard_transformations)
 
 MAX_LENGTH = 200
 # parse_expr() evaluates Python. The text reaching it is model output derived
@@ -19,8 +20,11 @@ MAX_LENGTH = 200
 _SAFE_CHARS = re.compile(r"^[0-9A-Za-z+\-*/^().,=\s]*$")
 _FUNCTIONS = {"sqrt": sympy.sqrt, "sin": sympy.sin, "cos": sympy.cos, "tan": sympy.tan,
               "log": sympy.log, "ln": sympy.log, "exp": sympy.exp, "abs": sympy.Abs, "pi": sympy.pi}
-_TRANSFORMS = standard_transformations + (convert_xor,)
+# implicit_multiplication: models (and people) write 4(2m-1)+3m, not 4*(2*m-1)+3*m; without
+# it such an equation didn't parse and the exact check was silently skipped.
+_TRANSFORMS = standard_transformations + (convert_xor, implicit_multiplication)
 _SPLIT_SOLUTIONS = re.compile(r"\s*(?:,|;|\bor\b|\bou\b|\bили\b)\s*", re.IGNORECASE)
+_DECIMAL_COMMA = re.compile(r"(?<=\d),(?=\d)")
 
 
 def parse(text) -> Optional[sympy.Expr]:
@@ -35,9 +39,15 @@ def parse(text) -> Optional[sympy.Expr]:
         else:
             return None
     try:
-        return parse_expr(text, local_dict=local_dict, transformations=_TRANSFORMS)
+        result = parse_expr(text, local_dict=local_dict, transformations=_TRANSFORMS)
     except Exception:
         return None
+    return result if isinstance(result, sympy.Expr) else None  # "0,5" parses to a tuple
+
+
+def _parse_number_or_expression(text):
+    """Students on the Portuguese and Russian curricula write 2,5 for 2.5."""
+    return parse(_DECIMAL_COMMA.sub(".", text)) if text else None
 
 
 def equivalent(a, b) -> Optional[bool]:
@@ -67,6 +77,17 @@ def _parse_solution_set(text):
             return None
         values.append(value)
     return values or None
+
+
+def _matches_solutions(text, solutions) -> Optional[bool]:
+    """Does the written answer give exactly these solutions? "2,5" can mean the number
+    2.5 (decimal comma) or the two solutions 2 and 5, so both readings are tried and
+    either one matching is a match."""
+    readings = {_DECIMAL_COMMA.sub(".", text or ""), text or ""}
+    results = [_same_solution_set(_parse_solution_set(reading), solutions) for reading in readings]
+    if True in results:
+        return True
+    return False if False in results else None
 
 
 def _same_solution_set(a, b) -> Optional[bool]:
@@ -126,19 +147,18 @@ def check(kind, problem_expr, correct_expr, student_expr) -> Check:
 
     if kind == "equation":
         solutions = _solve_equation(problem_expr)
-        student = _parse_solution_set(student_expr)
-        key = _parse_solution_set(correct_expr)
         if solutions is None:
-            return Check(student_matches=_same_solution_set(student, key))
+            key = _parse_solution_set(_DECIMAL_COMMA.sub(".", correct_expr or ""))
+            return Check(student_matches=_matches_solutions(student_expr, key) if key else None)
         reference = ", ".join(sympy.latex(s) for s in solutions) or "\\emptyset"
-        return Check(student_matches=_same_solution_set(student, solutions),
-                     key_matches=_same_solution_set(key, solutions),
+        return Check(student_matches=_matches_solutions(student_expr, solutions),
+                     key_matches=_matches_solutions(correct_expr, solutions),
                      reference_latex=reference)
 
     if kind in ("expression", "number"):
         problem = parse(problem_expr)
-        student = parse(student_expr)
-        key = parse(correct_expr)
+        student = _parse_number_or_expression(student_expr)
+        key = _parse_number_or_expression(correct_expr)
         if problem is None:
             return Check(student_matches=equivalent(student, key))
         try:

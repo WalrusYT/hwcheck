@@ -103,6 +103,12 @@ gpt-4o's own answer key was wrong on university analysis (sup/max of
 Multi-part answers must be transcribed in full ("inf = ..; sup = ..") - the
 last line alone made both readings and the verdicts meaningless.
 
+2026-10-04, `pt_equacoes_unnumbered` (4 pages, sheet whose first 7 equations have
+no numbers): live code 5 of 13 with every unnumbered problem graded as the last
+one; after unique labels + checker fixes 12 of 13 in every run on gpt-4o and
+gpt-5.5 (the 13th is genuinely wrong). Known gpt-4o grading slip that remains:
+`pt_dizimas` #10, a correct ordering chain marked incorrect (gpt-5.5: correct).
+
 With no task sheet the problem is only inferred from the student's work, so
 the no-sheet rule turns non-correct verdicts into `unclear`. Cases with the
 real sheet attached are the biggest missing piece of this eval set - add them.

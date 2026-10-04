@@ -98,15 +98,26 @@ Russian register is always «ты».
 ## AI grading pipeline (`grading.py`)
 
 1. **Transcribe** (vision, no answer key): read what the student wrote,
-   verbatim. Runs twice (temperature 0 and 0.7) on the full page plus 3
-   overlapping horizontal strips.
-2. **Reconcile**: where the two readings disagree, the problem becomes `unclear`
-   and is flagged - a misread must never be graded.
-3. **Grade** (text only): verdicts in the student's language and curriculum,
-   using the task sheet and answer key when attached.
-4. **Exact check**: `math_check` verifies expressions/equations with sympy and
-   overrules the model (including a wrong answer key).
-5. **No-sheet rule**: without a task sheet the problem itself is only inferred,
+   verbatim. Runs twice, one after the other (temperature 0 and 0.7), on the
+   full page plus 3 overlapping horizontal strips. Multi-part answers are kept
+   whole ("inf = ..; sup = .."), crossed-out writing is dropped.
+2. **Labels**: `clean_label` keeps only a printed number/letter; problems the
+   sheet prints without one become `#1`, `#2`, ... (`with_unique_labels`).
+   Everything downstream is keyed by label - duplicates or blanks once made
+   seven problems grade as one.
+3. **Reconcile**: readings are paired by label, else by the printed problem
+   text. A disagreement makes the problem `unclear` and flagged - a misread is
+   never graded. Exceptions that are not disagreements: notation synonyms, a
+   misread variable letter, and multi-part answers that differ in only some
+   parts (graded, with those parts passed on as `read_two_ways`).
+4. **Grade**: sees the transcription plus the printed sheet (never the
+   student's pages); blank problems are not sent. Verdicts in the student's
+   language and curriculum; every part of a multi-part problem is checked.
+5. **Exact check**: `math_check` verifies expressions/equations with sympy
+   (implicit multiplication and decimal commas accepted) and overrules the
+   model, including a wrong answer key - whose explanation is then removed.
+   What the checker was given is stored per problem as `exact_check`.
+6. **No-sheet rule**: without a task sheet the problem itself is only inferred,
    so `incorrect`/`partially_correct` become `unclear`; `correct` stands.
 
 Verdicts: `correct`, `partially_correct`, `incorrect`, `not_attempted`, `unclear`.

@@ -75,6 +75,9 @@ written, e.g. "A V; B F; C F; F V".
 - If the assigned sheet is provided, output EVERY problem and sub-part on it, \
 in its order, with its exact printed labels. Any the student did not answer: \
 found = false and empty answers.
+- label is ONLY the number or letter printed next to the problem ("7", "9a", \
+"b)") - never the problem itself. A problem the sheet prints with no number \
+or letter gets an empty label; keep such problems in the sheet's order.
 - If there is no sheet, labels are the student's own, combining the exercise \
 number and the letter exactly as written: "№58 а)" becomes "58а" (keep Cyrillic \
 letters Cyrillic). Answers with no visible label get "?". Never number the \
@@ -207,7 +210,7 @@ def normalize_answer(text):
     writing is dropped - it isn't the student's answer."""
     text = _CROSSED_OUT.sub("", text or "")
     text = _EMPTY_SET.sub("∅", text)
-    text = text.replace("−", "-").replace("·", "*").replace("\\cdot", "*").replace("\\times", "*")
+    text = re.sub(r"[−–—]", "-", text).replace("·", "*").replace("\\cdot", "*").replace("\\times", "*")
     previous = None
     while previous != text:
         previous = text
@@ -217,6 +220,7 @@ def normalize_answer(text):
     return re.sub(r"[{}()\s]", "", text).lower()
 
 
+_VARIABLE_PREFIX = re.compile(r"^[a-zа-я]=")
 _PART_NAME_NOISE = re.compile(r"\\(?:text|mathrm|operatorname)\b|[\\{}\s]")
 
 
@@ -246,7 +250,9 @@ def _readings_agree(first, second):
         # matters is that no part both readings saw was read differently.
         shared = parts_a.keys() & parts_b.keys()
         return bool(shared) and all(parts_a[k][0] == parts_b[k][0] for k in shared)
-    return normalize_answer(a) == normalize_answer(b)
+    # "x = 0,4" vs "m = 0,4": a handwritten variable letter read two ways is not a
+    # different answer - compare what comes after "letter =".
+    return _VARIABLE_PREFIX.sub("", normalize_answer(a)) == _VARIABLE_PREFIX.sub("", normalize_answer(b))
 
 
 def _parts_read_two_ways(a, b):
@@ -265,17 +271,76 @@ def _short(value, limit=30):
     return value if len(value) <= limit else value[:limit - 1] + "…"
 
 
+_LABEL_PREFIX = re.compile(r"^\s*((?:№\s*)?\(?[0-9A-Za-zА-Яа-я.]{1,6}\)(?:\s*[A-Za-zА-Яа-я]\))?|\d{1,3}\.)\s")
+
+
+def clean_label(label):
+    """Only the printed number or letter of a problem. For a problem printed with no
+    number, the model sometimes returns "" and sometimes the whole equation (or
+    "b) x/3 = 5"); anything that isn't a short number/letter counts as no label."""
+    label = (label or "").strip()
+    looks_like_math = "=" in label or "\\" in label or len(label) > 12
+    if not looks_like_math:
+        return "" if label == "?" else label
+    prefix = _LABEL_PREFIX.match(label)
+    return prefix.group(1).strip() if prefix else ""
+
+
+def with_unique_labels(problems):
+    """Give every problem a label no other problem has. Sheets often print equations
+    with no number at all, and everything downstream is keyed by label: seven problems
+    labelled "" were all compared with, and graded as, the last of them. Unnumbered
+    problems become "#1", "#2", ... in sheet order; repeated labels get " #n" added."""
+    keys = [normalize_label(p["label"]) for p in problems]
+    relabelled, unnumbered, repeats = [], 0, {}
+    for problem, key in zip(problems, keys):
+        if not key:
+            unnumbered += 1
+            problem = {**problem, "label": f"#{unnumbered}"}
+        elif keys.count(key) > 1:
+            repeats[key] = repeats.get(key, 0) + 1
+            problem = {**problem, "label": f"{problem['label']} #{repeats[key]}"}
+        relabelled.append(problem)
+    return relabelled
+
+
+def _pair_readings(primary_problems, secondary_problems):
+    """For each primary problem, the secondary reading of the same problem (or None).
+    A label pairs two readings only when it is unambiguous; otherwise the printed
+    problem text does, then the answer, then the position among the unlabelled ones."""
+    keys = [normalize_label(p["label"]) for p in secondary_problems]
+    by_label = {k: p for k, p in zip(keys, secondary_problems) if k and keys.count(k) == 1}
+    loose = [p for k, p in zip(keys, secondary_problems) if k not in by_label]
+    primary_keys = [normalize_label(p["label"]) for p in primary_problems]
+    used, pairs = set(), []
+
+    def first_unused(candidates):
+        return next((p for p in candidates if id(p) not in used), None)
+
+    loose_seen = 0
+    for problem, key in zip(primary_problems, primary_keys):
+        other = by_label.get(key) if id(by_label.get(key)) not in used else None
+        text, answer = normalize_answer(problem["problem_text"]), normalize_answer(problem["student_final_answer"])
+        if other is None and text:
+            other = first_unused(p for p in secondary_problems if normalize_answer(p["problem_text"]) == text)
+        if other is None and answer:
+            other = first_unused(p for p in secondary_problems
+                                 if normalize_answer(p["student_final_answer"]) == answer)
+        is_loose = key not in by_label
+        if other is None and is_loose and loose_seen < len(loose):
+            other = loose[loose_seen] if id(loose[loose_seen]) not in used else None
+        loose_seen += is_loose
+        if other is not None:
+            used.add(id(other))
+        pairs.append(other)
+    return pairs
+
+
 def reconcile(primary, secondary):
     """Pair each problem of the primary reading with the secondary reading.
     Returns [(problem, disagreement_note_or_None)]."""
-    by_label = {normalize_label(p["label"]): p for p in secondary["problems"]}
-    by_answer = {normalize_answer(p["student_final_answer"]): p
-                 for p in secondary["problems"] if p["student_final_answer"]}
     paired = []
-    for problem in primary["problems"]:
-        other = by_label.get(normalize_label(problem["label"]))
-        if other is None and problem["student_final_answer"]:
-            other = by_answer.get(normalize_answer(problem["student_final_answer"]))
+    for problem, other in zip(primary["problems"], _pair_readings(primary["problems"], secondary["problems"])):
         if other is None:
             # nothing written and nothing seen by the other reading: nothing to dispute
             note = (None if not problem["found"] else
@@ -320,6 +385,10 @@ not know the problem: judge only whether each of the student's steps follows \
 from the previous one, use verdict "unclear" if you cannot tell, and say in \
 flags_for_tutor that no problem statement was available.
 
+Return one entry per transcription entry, in the same order, each under exactly \
+the label it has in the transcription (labels like "#3" mark problems the sheet \
+prints without a number - the third unnumbered one).
+
 For each problem:
 - Solve it yourself in "work", step by step (common denominators, expansion, \
 cancellation, the sign flip when rewriting 4-x as -(x-4), ...), then \
@@ -341,15 +410,18 @@ slip, or right value not fully simplified when the task required it); \
 "unclear" (you cannot determine the answer, or the transcription marks the \
 answer as unreadable); "not_attempted" (found is false).
 - explanation: empty for correct and not_attempted. Otherwise one or two \
-sentences written TO THE STUDENT, in {language}, using the terms and notation \
-of their curriculum, naming the specific step that went wrong.
+sentences written TO THE STUDENT, naming the specific step that went wrong. \
+Write it in {language} - the student's own language, whatever language the \
+sheet is printed in - keeping only the curriculum's terms and notation as \
+their school writes them.
 - Machine-checkable forms, in plain ASCII with explicit * for multiplication, \
 ^ for powers and single-letter variables (e.g. (x-5)/(y-1), 2*a*(4*x+y)); \
 use an empty string when not applicable:
   problem_expr: the expression to simplify or compute, or the equation \
 "lhs = rhs" to solve;
-  correct_expr and student_expr: the final answers in that syntax (for \
-equations, the solutions separated by commas; for choices, the letters);
+  correct_expr and student_expr: the final answers in that syntax, with a \
+decimal point (for equations, the solutions separated by "; "; for choices, \
+the letters);
   answer_kind: expression, equation, number, choice, true_false, proof or text.
 - read_two_ways (only on some problems) lists parts of the answer that two \
 independent readings of the photo saw differently, as "part: reading 1 / \
@@ -455,10 +527,23 @@ def apply_exact_check(problem, graded, flags):
         return
     result = math_check.check(graded["answer_kind"], graded["problem_expr"],
                               graded["correct_expr"], graded["student_expr"])
+    # Kept with the result (not shown on any page) so a wrong verdict can be traced to
+    # what the checker was actually given.
+    problem["exact_check"] = {
+        "kind": graded["answer_kind"], "problem": graded["problem_expr"], "key": graded["correct_expr"],
+        "student": graded["student_expr"], "student_matches": result.student_matches,
+        "key_matches": result.key_matches, "reference": result.reference_latex,
+    }
     label = problem["problem_label"]
     if result.key_matches is False and result.reference_latex:
-        flags.append(f"{label}: the AI's answer key was wrong; replaced with the verified result.")
         problem["correct_answer"] = f"\\({result.reference_latex}\\)"
+        if problem["explanation"]:
+            # it was written around the wrong key ("the correct value is -1") - don't show it
+            problem["explanation"] = ""
+            flags.append(f"{label}: the AI's answer key was wrong; replaced with the verified result, and its "
+                         "explanation was removed - write one or recheck.")
+        else:
+            flags.append(f"{label}: the AI's answer key was wrong; replaced with the verified result.")
     if result.student_matches is False and problem["verdict"] in ("correct", "partially_correct"):
         flags.append(f"{label}: exact check shows the student's answer is not equivalent - marked incorrect.")
         problem["verdict"] = "incorrect"
@@ -495,8 +580,11 @@ def grade_submission(file_paths, student_name, topic=None, task_file_paths=None,
     primary = transcribe(student_parts, sheet_parts, curriculum, tutor_note, 0.0)
     secondary = transcribe(student_parts, sheet_parts, curriculum, tutor_note, 0.7)
     del student_parts  # the grading stage never sees the student's pages
+    for reading in (primary, secondary):
+        reading["problems"] = [{**p, "label": clean_label(p["label"])} for p in reading["problems"]]
+    primary = {**primary, "problems": with_unique_labels(primary["problems"])}
 
-    known = {normalize_label(label): answer for label, answer in (known_answers or {}).items()}
+    known ={normalize_label(label): answer for label, answer in (known_answers or {}).items()}
     flags = list(primary.get("notes", []))
     disputed = set()
     transcribed = []
@@ -519,6 +607,9 @@ def grade_submission(file_paths, student_name, topic=None, task_file_paths=None,
     else:
         graded = {"problems": [], "flags_for_tutor": [], "overall_summary": "No answers were found on the pages."}
     graded_by_label = {normalize_label(g["label"]): g for g in graded["problems"]}
+    if len(graded_by_label) != len(answered) and len(graded["problems"]) == len(answered):
+        # the grader renamed or repeated labels but answered every problem: trust its order
+        graded_by_label = {normalize_label(t["label"]): g for t, g in zip(answered, graded["problems"])}
     flags += graded["flags_for_tutor"]
 
     problems = []
