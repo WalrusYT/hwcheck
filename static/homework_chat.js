@@ -16,7 +16,8 @@ function initHomeworkChat(opts) {
   if (!card || !theoryBtn || !taskBtn) return;
 
   const chatUrl = card.dataset.chatUrl;
-  let remaining = opts.hintLimit;
+  const coinDots = opts.coinDotsId ? document.getElementById(opts.coinDotsId) : null;
+  let remaining = opts.hintRemaining ?? opts.hintLimit;
 
   function addBubble(role, text) {
     const wrap = document.createElement("div");
@@ -50,6 +51,9 @@ function initHomeworkChat(opts) {
       coinsEl.textContent = opts.coinsTemplate
         .replace("{n}", remaining)
         .replace("{total}", opts.hintLimit);
+    }
+    if (coinDots) {
+      coinDots.querySelectorAll(".coin").forEach((dot, i) => dot.classList.toggle("used", i >= remaining));
     }
     if (remaining <= 0) {
       actionsEl.hidden = true;

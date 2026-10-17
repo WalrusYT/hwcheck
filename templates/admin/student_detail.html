@@ -1,15 +1,78 @@
 {% extends "base.html" %}
 {% block title %}{{ student['name'] }} - TutorIlya Homework{% endblock %}
+{% block header %}{% include "admin/_nav.html" %}{% endblock %}
 {% block content %}
-{% include "admin/_nav.html" %}
+<div class="page-head">
+  <div>
+    <a href="{{ url_for('admin.students') }}" class="back-link">← Students</a>
+    <h1>{{ student['name'] }}</h1>
+    <div class="chips">
+      <span class="chip"><code>{{ student['username'] }}</code></span>
+      <span class="chip">{{ {'pt': 'Portuguese school', 'ru': 'Russian school'}.get(student['curriculum'], 'Curriculum not set') }}{% if student['school_year'] %} · {{ student['school_year'] }}{% endif %}</span>
+      <span class="chip">{{ 'Russian' if student['language'] == 'ru' else 'English' }}</span>
+    </div>
+  </div>
+  <a class="button button-secondary button-accent" href="{{ url_for('admin.student_performance', student_id=student['id']) }}">Performance &amp; parent report →</a>
+</div>
 
-<div class="card wide">
-  <a href="{{ url_for('admin.students') }}" class="muted">← back to students</a>
-  <h1>{{ student['name'] }}</h1>
-  <p class="muted">Username: <code>{{ student['username'] }}</code> ·
-    <a href="{{ url_for('admin.student_performance', student_id=student['id']) }}">View performance →</a>
-  </p>
+<div class="row">
+<div class="stack grow">
+  <section class="card" aria-labelledby="new-title">
+    <h2 id="new-title">Assign homework</h2>
+    <form method="post" action="{{ url_for('admin.create_assignment', student_id=student['id']) }}" enctype="multipart/form-data" class="form">{{ csrf_field() }}
+      <div class="form-row">
+        <label>
+          Title
+          <input type="text" name="title" placeholder="e.g. Equações 1" required>
+        </label>
+        <label>
+          Topic <span class="muted">(optional)</span>
+          <input type="text" name="topic" placeholder="e.g. Equações do 1.º grau">
+        </label>
+      </div>
+      <label>
+        Homework sheet <span class="muted">(strongly recommended - without it the AI can't tell which problems exist, and grading is much less reliable)</span>
+        <input type="file" name="task_files" accept="image/*,.heic,.heif,.pdf" multiple>
+      </label>
+      <label>
+        Solutions / answer key <span class="muted">(optional - only the AI sees it, never the student)</span>
+        <input type="file" name="solution_files" accept="image/*,.heic,.heif,.pdf" multiple>
+      </label>
+      <button type="submit">Create assignment</button>
+    </form>
+  </section>
 
+  <section class="section" aria-labelledby="assignments-title">
+    <h2 id="assignments-title">Assignments</h2>
+    {% if not assignments %}
+      <div class="card"><p class="muted" style="margin: 0">No assignments yet.</p></div>
+    {% else %}
+    <ul class="sub-list">
+      {% for a in assignments %}
+      {% set task_count = (a['task_files'] | fromjson | length) %}
+      {% set solution_count = (a['solution_files'] | fromjson | length) %}
+      <li class="sub-row">
+        <div class="sub-what" style="flex: 3 1 260px">
+          <strong>{{ a['title'] }}</strong>
+          <span class="meta">{{ a['topic'] or 'No topic' }} · {{ a['created_at'][:10] }}</span>
+        </div>
+        <div class="chips">
+          {% if task_count %}<span class="badge badge-correct">Sheet · {{ task_count }}</span>{% else %}<span class="badge badge-partially_correct">No sheet</span>{% endif %}
+          {% if solution_count %}<span class="badge badge-new">Answer key · {{ solution_count }}</span>{% endif %}
+        </div>
+        <form method="post" action="{{ url_for('admin.delete_assignment', assignment_id=a['id']) }}"
+              onsubmit="return confirm('Delete this assignment and all submissions/chat history for it? This cannot be undone.');">{{ csrf_field() }}
+          <button type="submit" class="button-secondary button-danger" aria-label="Delete {{ a['title'] }}">Delete</button>
+        </form>
+      </li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  </section>
+</div>
+
+<section class="card side" aria-labelledby="profile-title">
+  <h2 id="profile-title">Profile</h2>
   <form method="post" action="{{ url_for('admin.student_update', student_id=student['id']) }}" class="form">{{ csrf_field() }}
     <label>
       Full name
@@ -30,81 +93,18 @@
     {% include "admin/_profile_fields.html" %}
     <button type="submit">Save changes</button>
   </form>
-
-  <form method="post" action="{{ url_for('admin.student_reset_password', student_id=student['id']) }}" style="margin-top:14px">{{ csrf_field() }}
+  <form method="post" action="{{ url_for('admin.student_reset_password', student_id=student['id']) }}">{{ csrf_field() }}
     <button type="submit" class="button-secondary">Reset password</button>
   </form>
+</section>
 </div>
 
-<div class="card wide">
-  <h2>Create an assignment</h2>
-  <form method="post" action="{{ url_for('admin.create_assignment', student_id=student['id']) }}" enctype="multipart/form-data" class="form">{{ csrf_field() }}
-    <div class="form-row">
-      <label>
-        Title
-        <input type="text" name="title" placeholder="e.g. Chapter 4 worksheet" required>
-      </label>
-      <label>
-        Topic / context <span class="muted">(optional)</span>
-        <input type="text" name="topic" placeholder="e.g. Factoring quadratics">
-      </label>
-    </div>
-    <label>
-      Homework sheet <span class="muted">(strongly recommended - without it the AI can't tell which problems exist, and grading is much less reliable)</span>
-      <input type="file" name="task_files" accept="image/*,.heic,.heif,.pdf" multiple>
-    </label>
-    <label>
-      Solutions / answer key <span class="muted">(optional - only shown to the AI, never to the student, so it can grade against the real answers instead of solving from scratch)</span>
-      <input type="file" name="solution_files" accept="image/*,.heic,.heif,.pdf" multiple>
-    </label>
-    <button type="submit">Create assignment</button>
-  </form>
-</div>
-
-<div class="card wide">
-  <h2>Assignments</h2>
-  {% if not assignments %}
-    <p class="muted">No assignments yet.</p>
-  {% else %}
-  <div class="table-wrap">
-  <table class="table">
-    <thead><tr><th>Title</th><th>Topic</th><th>Files</th><th>Solutions</th><th>Created</th><th></th></tr></thead>
-    <tbody>
-      {% for a in assignments %}
-      <tr>
-        <td>{{ a['title'] }}</td>
-        <td>{{ a['topic'] or '—' }}</td>
-        <td>
-          {% set task_count = (a['task_files'] | fromjson | length) %}
-          {% if task_count %}<span class="badge badge-done">{{ task_count }} file{{ 's' if task_count != 1 else '' }}</span>
-          {% else %}<span class="muted">none</span>{% endif %}
-        </td>
-        <td>
-          {% set solution_count = (a['solution_files'] | fromjson | length) %}
-          {% if solution_count %}<span class="badge badge-done">{{ solution_count }} file{{ 's' if solution_count != 1 else '' }}</span>
-          {% else %}<span class="muted">none</span>{% endif %}
-        </td>
-        <td>{{ a['created_at'] }}</td>
-        <td>
-          <form method="post" action="{{ url_for('admin.delete_assignment', assignment_id=a['id']) }}"
-                onsubmit="return confirm('Delete this assignment and all submissions/chat history for it? This cannot be undone.');">{{ csrf_field() }}
-            <button type="submit" class="button button-secondary button-danger">Delete</button>
-          </form>
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  </div>
-  {% endif %}
-</div>
-
-<div class="card wide">
-  <h2>Danger zone</h2>
-  <p class="muted">Permanently deletes this student's account along with all their assignments, submissions, chat history, and notifications. This cannot be undone.</p>
+<section class="card" aria-labelledby="danger-title">
+  <h2 id="danger-title" style="font-size: 1.2rem">Danger zone</h2>
+  <p class="muted" style="margin: 0">Permanently deletes this student's account along with all their assignments, submissions, chat history, and notifications. This cannot be undone.</p>
   <form method="post" action="{{ url_for('admin.delete_student', student_id=student['id']) }}"
         onsubmit="return confirm('Delete this student and ALL their homework, submissions, and chat history? This cannot be undone.');">{{ csrf_field() }}
     <button type="submit" class="button-danger">Delete student</button>
   </form>
-</div>
+</section>
 {% endblock %}

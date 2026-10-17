@@ -93,28 +93,17 @@ def set_language(lang):
     return redirect(request.referrer or url_for("student.dashboard"))
 
 
-@student_bp.route("/")
-@student_required
-def dashboard():
-    conn = db.get_db()
-    student = conn.execute("SELECT * FROM students WHERE id = ?", (session["student_id"],)).fetchone()
-    conn.close()
-    return render_template("student/dashboard.html", student=student)
-
-
-@student_bp.route("/homeworks")
-@student_required
-def homeworks():
-    conn = db.get_db()
+def _homework_items(conn, student_id):
+    """This student's assignments, newest first, each with its status
+    (not_submitted / awaiting / reviewed) and, once reviewed, grade and comment."""
     assignments = conn.execute(
-        "SELECT * FROM homework_assignments WHERE student_id = ? ORDER BY created_at DESC",
-        (session["student_id"],),
+        "SELECT * FROM homework_assignments WHERE student_id = ? ORDER BY created_at DESC", (student_id,),
     ).fetchall()
     submissions = conn.execute(
-        "SELECT assignment_id, feedback_published, tutor_grade FROM student_submissions WHERE student_id = ?",
-        (session["student_id"],),
+        """SELECT assignment_id, feedback_published, tutor_grade, tutor_comment, submitted_at, reviewed_at, files
+           FROM student_submissions WHERE student_id = ?""",
+        (student_id,),
     ).fetchall()
-    conn.close()
     by_assignment = {}
     for s in submissions:
         by_assignment.setdefault(s["assignment_id"], []).append(s)
@@ -122,13 +111,42 @@ def homeworks():
     for a in assignments:
         subs = by_assignment.get(a["id"], [])
         published = next((s for s in subs if s["feedback_published"]), None)
-        if published:
-            status, grade = "reviewed", published["tutor_grade"]
-        elif subs:
-            status, grade = "awaiting", None
-        else:
-            status, grade = "not_submitted", None
-        items.append({"assignment": a, "status": status, "grade": grade})
+        latest = published or (subs[-1] if subs else None)
+        status = "reviewed" if published else ("awaiting" if subs else "not_submitted")
+        items.append({
+            "assignment": a,
+            "status": status,
+            "grade": published["tutor_grade"] if published else None,
+            "comment": published["tutor_comment"] if published else None,
+            "submitted_at": latest["submitted_at"] if latest else None,
+            "reviewed_at": published["reviewed_at"] if published else None,
+            "photo_count": len(json.loads(latest["files"] or "[]")) if latest else 0,
+        })
+    return items
+
+
+@student_bp.route("/")
+@student_required
+def dashboard():
+    conn = db.get_db()
+    student = conn.execute("SELECT * FROM students WHERE id = ?", (session["student_id"],)).fetchone()
+    items = _homework_items(conn, session["student_id"])
+    conn.close()
+    columns = {status: [i for i in items if i["status"] == status]
+               for status in ("not_submitted", "awaiting", "reviewed")}
+    # oldest first, so the chart reads left to right like time
+    recent = sorted((i for i in items if i["reviewed_at"]), key=lambda i: i["reviewed_at"])[-6:]
+    letter, gpa = performance.compute_average([i["grade"] for i in items if i["grade"]])
+    return render_template("student/dashboard.html", student=student, columns=columns,
+                           recent_grades=recent, letter=letter, gpa=gpa, hint_limit=homework_chat.HINT_LIMIT)
+
+
+@student_bp.route("/homeworks")
+@student_required
+def homeworks():
+    conn = db.get_db()
+    items = _homework_items(conn, session["student_id"])
+    conn.close()
     return render_template("student/homeworks.html", items=items)
 
 

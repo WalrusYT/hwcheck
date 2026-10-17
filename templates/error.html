@@ -1,9 +1,12 @@
 {% extends "base.html" %}
 {% block title %}TutorIlya Homework{% endblock %}
 {% block content %}
-<div class="card narrow center">
-  <h1>Oops</h1>
-  <p class="muted">{{ message }}</p>
-  <a class="button" href="/">Go home</a>
+<div class="auth">
+  <div class="card center">
+    <img class="logo-img" src="{{ url_for('static', filename='logo/logo_student.png') }}" alt="TutorIlya">
+    <h1>Something went wrong</h1>
+    <p class="muted" style="margin: 0">{{ message }}</p>
+    <a class="button" href="/">Go to the start page</a>
+  </div>
 </div>
 {% endblock %}

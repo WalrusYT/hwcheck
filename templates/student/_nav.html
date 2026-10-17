@@ -1,17 +1,31 @@
-<nav class="student-nav">
-  {% include "student/_logo.html" %}
-  <a href="{{ url_for('student.dashboard') }}">{{ t('nav.dashboard') }}</a>
-  <a href="{{ url_for('student.homeworks') }}">{{ t('nav.homeworks') }}</a>
-  <a href="{{ url_for('student.performance_view') }}">{{ t('nav.performance') }}</a>
-  <div class="right nav-cluster">
-    {% include "student/_notifications.html" %}
-    <form method="post" action="{{ url_for('student.set_language', lang='en') }}" class="lang-form">{{ csrf_field() }}
-      <button type="submit" class="lang-btn {{ 'lang-active' if session.get('lang', 'en') == 'en' else '' }}">EN</button>
-    </form>
-    <form method="post" action="{{ url_for('student.set_language', lang='ru') }}" class="lang-form">{{ csrf_field() }}
-      <button type="submit" class="lang-btn {{ 'lang-active' if session.get('lang') == 'ru' else '' }}">RU</button>
-    </form>
-    <a href="{{ url_for('student.change_password') }}">{{ t('nav.change_password') }}</a>
-    <a href="{{ url_for('student.logout') }}">{{ t('nav.logout') }}</a>
+<header class="site-header">
+  <div class="site-header-inner">
+    {% include "student/_logo.html" %}
+    <nav class="main-nav" aria-label="{{ t('site_name') }}">
+      <a href="{{ url_for('student.dashboard') }}" class="{{ 'active' if request.endpoint == 'student.dashboard' }}">{{ t('nav.dashboard') }}</a>
+      <a href="{{ url_for('student.homeworks') }}" class="{{ 'active' if request.endpoint in ('student.homeworks', 'student.homework_detail') }}">{{ t('nav.homeworks') }}</a>
+      <a href="{{ url_for('student.performance_view') }}" class="{{ 'active' if request.endpoint == 'student.performance_view' }}">{{ t('nav.performance') }}</a>
+    </nav>
+    <div class="header-actions">
+      <div class="lang-switch" role="group" aria-label="Language">
+        <form method="post" action="{{ url_for('student.set_language', lang='en') }}" class="lang-form">{{ csrf_field() }}
+          <button type="submit" class="lang-btn {{ 'lang-active' if session.get('lang', 'en') == 'en' else '' }}" aria-pressed="{{ 'true' if session.get('lang', 'en') == 'en' else 'false' }}">EN</button>
+        </form>
+        <form method="post" action="{{ url_for('student.set_language', lang='ru') }}" class="lang-form">{{ csrf_field() }}
+          <button type="submit" class="lang-btn {{ 'lang-active' if session.get('lang') == 'ru' else '' }}" aria-pressed="{{ 'true' if session.get('lang') == 'ru' else 'false' }}">RU</button>
+        </form>
+      </div>
+      {% include "student/_notifications.html" %}
+      <div class="menu-wrap">
+        <button type="button" class="icon-btn avatar" id="student-account-btn" aria-label="{{ t('nav.account') }}">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg>
+        </button>
+        <div class="menu-dropdown" id="student-account-menu" hidden>
+          <a class="menu-item" href="{{ url_for('student.change_password') }}">{{ t('nav.change_password') }}</a>
+          <a class="menu-item" href="{{ url_for('student.logout') }}">{{ t('nav.logout') }}</a>
+        </div>
+      </div>
+    </div>
   </div>
-</nav>
+  <script>initNotifDropdown('student-account-btn', 'student-account-menu');</script>
+</header>

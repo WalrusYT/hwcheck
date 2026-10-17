@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{ session.get('lang', 'en') if request.blueprint == 'student' else 'en' }}">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -9,6 +9,9 @@
 <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32.png') }}">
 <link rel="icon" type="image/png" sizes="64x64" href="{{ url_for('static', filename='favicon.png') }}">
 <link rel="apple-touch-icon" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Manrope:wght@400;500;600;700;800&family=STIX+Two+Text:ital,wght@1,500&display=swap">
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
@@ -26,17 +29,19 @@
     }
   });
 </script>
+<script src="{{ url_for('static', filename='notifications.js') }}"></script>
 </head>
 <body>
-  <div class="page">
+  {% block header %}{% endblock %}
+  <main class="page">
     {% with messages = get_flashed_messages() %}
       {% if messages %}
-        <div class="flash">
+        <div class="flash" role="status">
           {% for m in messages %}<div>{{ m }}</div>{% endfor %}
         </div>
       {% endif %}
     {% endwith %}
     {% block content %}{% endblock %}
-  </div>
+  </main>
 </body>
 </html>

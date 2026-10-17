@@ -1,38 +1,35 @@
 {% extends "base.html" %}
 {% block title %}{{ t('nav.homeworks') }} - {{ t('site_name') }}{% endblock %}
+{% block header %}{% include "student/_nav.html" %}{% endblock %}
 {% block content %}
-{% include "student/_nav.html" %}
+<div class="page-head"><div><h1>{{ t('homeworks.title') }}</h1></div></div>
 
-<div class="card wide">
-  <h1>{{ t('homeworks.title') }}</h1>
-  {% if not items %}
-    <p class="muted">{{ t('homeworks.empty') }}</p>
-  {% else %}
-  <div class="table-wrap">
-  <table class="table">
-    <tbody>
-      {% for item in items %}
-      <tr>
-        <td>
-          <a href="{{ url_for('student.homework_detail', assignment_id=item['assignment']['id']) }}">
-            {{ item['assignment']['title'] }}
-          </a>
-          {% if item['assignment']['topic'] %}<br><span class="muted">{{ item['assignment']['topic'] }}</span>{% endif %}
-        </td>
-        <td>
-          {% if item['status'] == 'reviewed' %}
-            <span class="badge badge-reviewed">{{ t('homeworks.status.reviewed') }} - {{ item['grade'] }}</span>
-          {% elif item['status'] == 'awaiting' %}
-            <span class="badge badge-new">{{ t('homeworks.status.awaiting') }}</span>
-          {% else %}
-            <span class="badge">{{ t('homeworks.status.not_submitted') }}</span>
-          {% endif %}
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  </div>
-  {% endif %}
+{% if not items %}
+  <div class="card"><p class="muted" style="margin: 0">{{ t('homeworks.empty') }}</p></div>
+{% else %}
+<div class="board">
+  {% for item in items %}
+  <a class="hw-card" href="{{ url_for('student.homework_detail', assignment_id=item['assignment']['id']) }}" style="text-decoration: none; color: inherit">
+    <div class="topline">
+      <div>
+        <h3>{{ item['assignment']['title'] }}</h3>
+        {% if item['assignment']['topic'] %}<p class="muted">{{ item['assignment']['topic'] }}</p>{% endif %}
+      </div>
+      {% if item['status'] == 'reviewed' and item['grade'] %}
+        <div class="grade-stamp" aria-label="{{ t('homework.your_grade') }}: {{ item['grade'] }}">{{ item['grade'] }}</div>
+      {% endif %}
+    </div>
+    <div>
+      {% if item['status'] == 'reviewed' %}
+        <span class="badge badge-reviewed">{{ t('homeworks.status.reviewed') }}</span>
+      {% elif item['status'] == 'awaiting' %}
+        <span class="badge badge-partially_correct">{{ t('homeworks.status.awaiting') }}</span>
+      {% else %}
+        <span class="badge badge-new">{{ t('homeworks.status.not_submitted') }}</span>
+      {% endif %}
+    </div>
+  </a>
+  {% endfor %}
 </div>
+{% endif %}
 {% endblock %}

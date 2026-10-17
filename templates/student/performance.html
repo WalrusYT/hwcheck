@@ -1,40 +1,51 @@
 {% extends "base.html" %}
 {% block title %}{{ t('nav.performance') }} - {{ t('site_name') }}{% endblock %}
+{% block header %}{% include "student/_nav.html" %}{% endblock %}
 {% block content %}
-{% include "student/_nav.html" %}
+<div class="page-head"><div><h1>{{ t('performance.title') }}</h1></div></div>
 
-<div class="card wide">
-  <h1>{{ t('performance.title') }}</h1>
+<div class="row">
+  <section class="card side" aria-labelledby="avg-title">
+    <h2 id="avg-title">{{ t('performance.average') }}</h2>
+    {% if letter %}
+      <div style="display: flex; align-items: center; gap: 18px">
+        <div class="grade-stamp big">{{ letter }}</div>
+        <span class="muted">{{ gpa }} / 4.0</span>
+      </div>
+    {% else %}
+      <p class="muted" style="margin: 0">{{ t('performance.no_grades') }}</p>
+    {% endif %}
+  </section>
+  <section class="card grow {{ 'card-amber' if student['performance_narrative'] }}">
+    {% if student['performance_narrative'] %}
+      <p style="margin: 0; font-size: 1.08rem; line-height: 1.65; white-space: pre-line">{{ student['performance_narrative'] }}</p>
+    {% elif letter %}
+      <p class="muted" style="margin: 0">{{ t('performance.narrative_pending') }}</p>
+    {% else %}
+      <p class="muted" style="margin: 0">{{ t('dashboard.no_grades') }}</p>
+    {% endif %}
+  </section>
+</div>
 
-  <p>
-    <strong>{{ t('performance.average') }}:</strong>
-    {% if letter %}{{ letter }} ({{ gpa }}/4.0){% else %}{{ t('performance.no_grades') }}{% endif %}
-  </p>
-
-  {% if student['performance_narrative'] %}
-    <div class="flags">{{ student['performance_narrative'] }}</div>
-  {% elif letter %}
-    <p class="muted">{{ t('performance.narrative_pending') }}</p>
-  {% endif %}
-
-  <h2>{{ t('performance.history') }}</h2>
+<section class="section" aria-labelledby="history-title">
+  <h2 id="history-title">{{ t('performance.history') }}</h2>
   {% if not history %}
-    <p class="muted">{{ t('performance.no_grades') }}</p>
+    <div class="card"><p class="muted" style="margin: 0">{{ t('performance.no_grades') }}</p></div>
   {% else %}
-  <div class="table-wrap">
-  <table class="table">
-    <thead><tr><th>{{ t('homeworks.title') }}</th><th>{{ t('performance.average') }}</th><th>{{ t('homework.tutor_comment') }}</th></tr></thead>
-    <tbody>
-      {% for h in history %}
-      <tr>
-        <td>{{ h['assignment_title'] }}</td>
-        <td><span class="badge badge-{{ h['tutor_grade'] }}">{{ h['tutor_grade'] }}</span></td>
-        <td>{{ h['tutor_comment'] or '—' }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+  <div class="board">
+    {% for h in history %}
+    <article class="hw-card">
+      <div class="topline">
+        <div>
+          <h3>{{ h['assignment_title'] }}</h3>
+          {% if h['reviewed_at'] %}<p class="muted">{{ h['reviewed_at'][:10] }}</p>{% endif %}
+        </div>
+        <div class="grade-stamp">{{ h['tutor_grade'] }}</div>
+      </div>
+      {% if h['tutor_comment'] %}<blockquote>{{ h['tutor_comment'] }}</blockquote>{% endif %}
+    </article>
+    {% endfor %}
   </div>
   {% endif %}
-</div>
+</section>
 {% endblock %}

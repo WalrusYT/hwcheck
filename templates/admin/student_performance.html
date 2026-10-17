@@ -1,42 +1,50 @@
 {% extends "base.html" %}
 {% block title %}{{ student['name'] }} performance - TutorIlya Homework{% endblock %}
+{% block header %}{% include "admin/_nav.html" %}{% endblock %}
 {% block content %}
-{% include "admin/_nav.html" %}
-
-<div class="card wide">
-  <a href="{{ url_for('admin.student_detail', student_id=student['id']) }}" class="muted">← back to {{ student['name'] }}</a>
-  <h1>{{ student['name'] }} - Performance</h1>
-
-  <p>
-    <strong>Average grade:</strong>
-    {% if letter %}{{ letter }} ({{ gpa }}/4.0){% else %}No graded homework yet{% endif %}
-  </p>
-
-  {% if student['performance_narrative'] %}
-    <div class="flags">{{ student['performance_narrative'] }}</div>
-  {% endif %}
-
+<div class="page-head">
+  <div>
+    <a href="{{ url_for('admin.student_detail', student_id=student['id']) }}" class="back-link">← {{ student['name'] }}</a>
+    <h1>{{ student['name'] }} · Performance</h1>
+  </div>
   <a class="button" href="{{ url_for('admin.student_performance_pdf', student_id=student['id']) }}">Export PDF for parents</a>
+</div>
 
-  <h2>Grade history</h2>
+<div class="row">
+  <section class="card side" aria-labelledby="avg-title">
+    <h2 id="avg-title">Average grade</h2>
+    {% if letter %}
+      <div style="display: flex; align-items: center; gap: 18px"><div class="grade-stamp big">{{ letter }}</div><span class="muted">{{ gpa }} / 4.0</span></div>
+    {% else %}
+      <p class="muted" style="margin: 0">No graded homework yet.</p>
+    {% endif %}
+  </section>
+  <section class="card grow {{ 'card-amber' if student['performance_narrative'] }}">
+    {% if student['performance_narrative'] %}
+      <div class="field-label">Summary the student sees</div>
+      <p style="margin: 0; line-height: 1.65; white-space: pre-line">{{ student['performance_narrative'] }}</p>
+    {% else %}
+      <p class="muted" style="margin: 0">No summary yet - it is written after the first published grade.</p>
+    {% endif %}
+  </section>
+</div>
+
+<section class="section" aria-labelledby="history-title">
+  <h2 id="history-title">Grade history</h2>
   {% if not history %}
-    <p class="muted">No graded homework yet.</p>
+    <div class="card"><p class="muted" style="margin: 0">No graded homework yet.</p></div>
   {% else %}
-  <div class="table-wrap">
-  <table class="table">
-    <thead><tr><th>Homework</th><th>Grade</th><th>Comment</th><th>Reviewed</th></tr></thead>
-    <tbody>
-      {% for h in history %}
-      <tr>
-        <td>{{ h['assignment_title'] }}</td>
-        <td><span class="badge badge-{{ h['tutor_grade'] }}">{{ h['tutor_grade'] }}</span></td>
-        <td>{{ h['tutor_comment'] or '—' }}</td>
-        <td>{{ h['reviewed_at'] }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+  <div class="board">
+    {% for h in history %}
+    <article class="hw-card">
+      <div class="topline">
+        <div><h3>{{ h['assignment_title'] }}</h3><p class="muted">{{ (h['reviewed_at'] or '')[:10] }}</p></div>
+        <div class="grade-stamp">{{ h['tutor_grade'] }}</div>
+      </div>
+      {% if h['tutor_comment'] %}<blockquote>{{ h['tutor_comment'] }}</blockquote>{% endif %}
+    </article>
+    {% endfor %}
   </div>
   {% endif %}
-</div>
+</section>
 {% endblock %}

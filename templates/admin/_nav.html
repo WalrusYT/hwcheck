@@ -1,9 +1,13 @@
-<nav class="admin-nav">
-  {% include "admin/_logo.html" %}
-  <a href="{{ url_for('admin.dashboard') }}">Submissions</a>
-  <a href="{{ url_for('admin.students') }}">Students</a>
-  <div class="right nav-cluster">
-    {% include "admin/_notifications.html" %}
-    <a href="{{ url_for('admin.admin_logout') }}">Log out</a>
+<header class="site-header">
+  <div class="site-header-inner">
+    {% include "admin/_logo.html" %}
+    <nav class="main-nav" aria-label="Tutor">
+      <a href="{{ url_for('admin.dashboard') }}" class="{{ 'active' if request.endpoint in ('admin.dashboard', 'admin.submission_detail') }}">Submissions</a>
+      <a href="{{ url_for('admin.students') }}" class="{{ 'active' if request.endpoint in ('admin.students', 'admin.student_detail', 'admin.student_performance') }}">Students</a>
+    </nav>
+    <div class="header-actions">
+      {% include "admin/_notifications.html" %}
+      <a class="button button-secondary" href="{{ url_for('admin.admin_logout') }}">Log out</a>
+    </div>
   </div>
-</nav>
+</header>

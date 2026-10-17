@@ -1,11 +1,37 @@
 {% extends "base.html" %}
 {% block title %}Students - TutorIlya Homework{% endblock %}
+{% block header %}{% include "admin/_nav.html" %}{% endblock %}
 {% block content %}
-{% include "admin/_nav.html" %}
+<div class="page-head"><div><h1>Students</h1></div></div>
 
-<div class="card wide">
-  <h1>Create a student</h1>
-  <p class="muted">Pick a username and password, then share them with the student yourself.</p>
+<section class="section" aria-label="Existing students">
+  {% if not students %}
+    <div class="card"><p class="muted" style="margin: 0">No students yet - create the first one below.</p></div>
+  {% else %}
+  <ul class="sub-list">
+    {% for s in students %}
+    <li class="sub-row">
+      <div class="sub-who">
+        <span class="avatar-tile" aria-hidden="true">{{ s['name'][:2] }}</span>
+        <div style="min-width: 0"><strong>{{ s['name'] }}</strong><div class="meta"><code>{{ s['username'] }}</code></div></div>
+      </div>
+      <div class="sub-what"><span class="meta">Since {{ s['created_at'][:10] }}</span></div>
+      <div class="sub-actions">
+        <a href="{{ url_for('admin.student_detail', student_id=s['id']) }}" class="button">Open</a>
+        <form method="post" action="{{ url_for('admin.delete_student', student_id=s['id']) }}"
+              onsubmit="return confirm('Delete this student and ALL their homework, submissions, and chat history? This cannot be undone.');">{{ csrf_field() }}
+          <button type="submit" class="button-secondary button-danger" aria-label="Delete {{ s['name'] }}">Delete</button>
+        </form>
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</section>
+
+<section class="card" aria-labelledby="create-title">
+  <h2 id="create-title">Create a student</h2>
+  <p class="muted" style="margin: 0">Pick a username and password, then share them with the student yourself.</p>
   <form method="post" class="form">{{ csrf_field() }}
     <div class="form-row">
       <label>
@@ -14,56 +40,29 @@
       </label>
       <label>
         Username
-        <input type="text" name="username" required style="text-transform:lowercase">
+        <input type="text" name="username" required style="text-transform:lowercase" autocapitalize="none">
       </label>
       <label>
-        Password <span class="muted">(optional, auto-generated if left blank)</span>
+        Password <span class="muted">(optional, auto-generated if blank)</span>
         <input type="text" name="password" placeholder="{{ suggested_password }}" minlength="8">
       </label>
     </div>
     <label>
-      Schedule note <span class="muted">(optional)</span>
+      Schedule note <span class="muted">(optional, shown on the student's home page)</span>
       <input type="text" name="schedule_text" placeholder="e.g. Tuesdays 18:00, Fridays 18:00 (Lisbon time)">
     </label>
-    <label>
-      Miro board link <span class="muted">(optional)</span>
-      <input type="url" name="miro_link" placeholder="https://miro.com/app/board/...">
-    </label>
-    <label>
-      Zoom link <span class="muted">(optional)</span>
-      <input type="url" name="zoom_link" placeholder="https://zoom.us/j/...">
-    </label>
+    <div class="form-row">
+      <label>
+        Miro board link <span class="muted">(optional)</span>
+        <input type="url" name="miro_link" placeholder="https://miro.com/app/board/...">
+      </label>
+      <label>
+        Zoom link <span class="muted">(optional)</span>
+        <input type="url" name="zoom_link" placeholder="https://zoom.us/j/...">
+      </label>
+    </div>
     {% include "admin/_profile_fields.html" %}
     <button type="submit">Create student</button>
   </form>
-</div>
-
-<div class="card wide">
-  <h2>Existing students</h2>
-  {% if not students %}
-    <p class="muted">No students yet.</p>
-  {% else %}
-  <div class="table-wrap">
-  <table class="table">
-    <thead><tr><th>Name</th><th>Username</th><th>Created</th><th></th><th></th></tr></thead>
-    <tbody>
-      {% for s in students %}
-      <tr>
-        <td>{{ s['name'] }}</td>
-        <td><code>{{ s['username'] }}</code></td>
-        <td>{{ s['created_at'] }}</td>
-        <td><a href="{{ url_for('admin.student_detail', student_id=s['id']) }}" class="button button-secondary button-accent">View →</a></td>
-        <td>
-          <form method="post" action="{{ url_for('admin.delete_student', student_id=s['id']) }}"
-                onsubmit="return confirm('Delete this student and ALL their homework, submissions, and chat history? This cannot be undone.');">{{ csrf_field() }}
-            <button type="submit" class="button-secondary button-danger">Delete</button>
-          </form>
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  </div>
-  {% endif %}
-</div>
+</section>
 {% endblock %}

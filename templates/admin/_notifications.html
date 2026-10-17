@@ -1,9 +1,6 @@
 <div class="notif-wrap">
-  <button type="button" class="notif-bell" id="admin-notif-bell" aria-label="Notifications">
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-      <path d="M12 3C9.2 3 7 5.2 7 8V11.5L5.5 14.5C5.2 15.1 5.6 15.8 6.3 15.8H17.7C18.4 15.8 18.8 15.1 18.5 14.5L17 11.5V8C17 5.2 14.8 3 12 3Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
-      <path d="M9.5 18.5C9.8 19.6 10.8 20.3 12 20.3C13.2 20.3 14.2 19.6 14.5 18.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-    </svg>
+  <button type="button" class="icon-btn" id="admin-notif-bell" aria-label="Notifications{% if admin_unread_count %} ({{ admin_unread_count }} new){% endif %}">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"></path></svg>
     {% if admin_unread_count %}<span class="notif-badge">{{ admin_unread_count }}</span>{% endif %}
   </button>
   <div class="notif-dropdown" id="admin-notif-dropdown" hidden>
@@ -27,6 +24,4 @@
     {% endif %}
   </div>
 </div>
-
-<script src="{{ url_for('static', filename='notifications.js') }}"></script>
 <script>initNotifDropdown('admin-notif-bell', 'admin-notif-dropdown');</script>

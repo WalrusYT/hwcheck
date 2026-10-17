@@ -1,182 +1,213 @@
 {% extends "base.html" %}
-{% block title %}Submission #{{ submission['id'] }} - TutorIlya Homework{% endblock %}
+{% block title %}{{ student['name'] }} · {{ assignment['title'] }} - TutorIlya Homework{% endblock %}
+{% block header %}{% include "admin/_nav.html" %}{% endblock %}
 {% block content %}
-{% include "admin/_nav.html" %}
+{% set ai_pending = submission['ai_status'] == 'pending' %}
+{% set verdict_labels = [('correct', 'Correct'), ('partially_correct', 'Partly'), ('incorrect', 'Incorrect'), ('unclear', 'Unclear'), ('not_attempted', 'Not attempted')] %}
+{% set ns = namespace(flagged=[]) %}
+{% if ai_result %}{% for f in ai_result['flags_for_tutor'] %}{% set ns.flagged = ns.flagged + [f.split(':')[0].strip()] %}{% endfor %}{% endif %}
 
-<div class="card wide">
-  <a href="{{ url_for('admin.dashboard') }}" class="muted">← back to submissions</a>
-  <h1>{{ student['name'] }} — {{ assignment['title'] }}</h1>
-  <p class="muted">
-    Submitted {{ submission['submitted_at'] }}
-    {% if assignment and assignment['topic'] %} · Topic: {{ assignment['topic'] }}{% endif %}
-    · <a href="{{ url_for('admin.student_detail', student_id=student['id']) }}">View student →</a>
-  </p>
-
-  {% if task_files %}
-  <h2>Assigned homework sheet</h2>
-  <div class="files">
-    {% for f in task_files %}
-      <a href="{{ url_for('admin.assignment_file', assignment_id=assignment['id'], filename=f) }}" target="_blank">
-        {% if f.lower().endswith('.pdf') %}📄 {{ f }}
-        {% else %}<img src="{{ url_for('admin.assignment_file', assignment_id=assignment['id'], filename=f) }}" alt="{{ f }}">{% endif %}
-      </a>
-    {% endfor %}
+<div class="page-head">
+  <div>
+    <a href="{{ url_for('admin.dashboard') }}" class="back-link">← Submissions</a>
+    <h1>{{ student['name'] }} · {{ assignment['title'] }}</h1>
+    <p class="muted" style="margin: 0">
+      Sent {{ submission['submitted_at'] }} · {{ files|length }} file{{ 's' if files|length != 1 }}
+      {% if assignment and assignment['topic'] %} · {{ assignment['topic'] }}{% endif %}
+      · writes in {{ 'Russian' if student['language'] == 'ru' else 'English' }}
+    </p>
   </div>
-  {% endif %}
+  <a class="button button-secondary" href="{{ url_for('admin.student_detail', student_id=student['id']) }}">Student profile</a>
+</div>
 
-  <h2>Submitted files</h2>
-  <div class="files">
-    {% for f in files %}
-      <a href="{{ url_for('admin.submission_file', submission_id=submission['id'], filename=f) }}" target="_blank">
-        {% if f.lower().endswith('.pdf') %}📄 {{ f }}
-        {% else %}<img src="{{ url_for('admin.submission_file', submission_id=submission['id'], filename=f) }}" alt="{{ f }}">{% endif %}
-      </a>
-    {% endfor %}
-  </div>
+{% if task_files %}
+<div class="file-tiles">
+  {% for f in task_files %}
+  <a class="file-tile" href="{{ url_for('admin.assignment_file', assignment_id=assignment['id'], filename=f) }}" target="_blank" rel="noopener">
+    <span class="ficon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"></path><path d="M14 2v6h6"></path></svg></span>
+    <span>Sheet · {{ f }}</span>
+  </a>
+  {% endfor %}
+</div>
+{% else %}
+<div class="flags">This assignment has no homework sheet attached, so the AI had to guess which problems exist
+  and what they ask. Check its problem list against the photos carefully.</div>
+{% endif %}
 
-  {% set ai_pending = submission['ai_status'] == 'pending' %}
-  <h2>AI review {% if show_form %}(draft — verify per task before publishing){% endif %}</h2>
-  {% if not task_files %}
-    <div class="flags">This assignment has no homework sheet attached, so the AI had to guess which problems exist
-      and what they ask. Check its problem list against the photo carefully.</div>
-  {% endif %}
-  {% if ai_pending %}
-    <p class="muted" id="ai-pending-msg">⏳ AI is grading this submission in the background — this page will update automatically when it's done.</p>
-  {% elif submission['ai_status'] == 'error' %}
-    <div class="errors">AI grading failed: {{ submission['ai_error'] }}</div>
-    <form method="post" action="{{ url_for('admin.retry_grading', submission_id=submission['id']) }}" style="margin-top:10px">{{ csrf_field() }}
-      <button type="submit" class="button-secondary">Retry AI grading</button>
-    </form>
-  {% elif not ai_result %}
-    <p class="muted">Still processing…</p>
-  {% else %}
-    <p class="muted">{{ ai_result['overall_summary'] }} — <strong>{{ ai_result['estimated_score'] }}</strong></p>
-    {% if ai_result['flags_for_tutor'] %}
-      <div class="flags">
-        <strong>Flags for you to double-check:</strong>
-        <ul>{% for f in ai_result['flags_for_tutor'] %}<li>{{ f }}</li>{% endfor %}</ul>
+{% if ai_pending %}
+  <div class="card" id="ai-pending-msg"><p style="margin: 0; font-weight: 700">The AI is grading this submission in the background - this page updates by itself when it's done.</p></div>
+{% elif submission['ai_status'] == 'error' %}
+  <div class="errors">AI grading failed: {{ submission['ai_error'] }}</div>
+  <form method="post" action="{{ url_for('admin.retry_grading', submission_id=submission['id']) }}" class="form">{{ csrf_field() }}
+    <button type="submit" class="button-secondary">Retry AI grading</button>
+  </form>
+{% elif ai_result %}
+  {% set counts = namespace(correct=0, wrong=0, other=0) %}
+  {% for p in problems %}
+    {% if p['verdict'] == 'correct' %}{% set counts.correct = counts.correct + 1 %}
+    {% elif p['verdict'] in ('incorrect', 'partially_correct') %}{% set counts.wrong = counts.wrong + 1 %}
+    {% else %}{% set counts.other = counts.other + 1 %}{% endif %}
+  {% endfor %}
+  <section class="card card-dark ai-banner" aria-label="AI draft summary">
+    <div class="title">
+      <span class="mark"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"></path><path d="m9 12 2 2 4-4"></path></svg></span>
+      <div>
+        <div class="display" style="font-size: 1.35rem; font-weight: 600; color: #fff">{% if show_form %}AI draft — check before publishing{% else %}Published feedback{% endif %}</div>
+        <p>{{ ai_result['overall_summary'] }}</p>
       </div>
-    {% endif %}
-    {% if show_form and problems %}
-    <p class="hint">"Recheck with AI" re-grades the whole submission. Spotted a mistake? Add a note in "Note for AI" on those task(s) first so the AI looks at them closely; leave all notes blank for a plain re-grade.</p>
-    {% endif %}
+    </div>
+    <div class="chips">
+      <span class="badge badge-correct">{{ counts.correct }} correct</span>
+      <span class="badge badge-incorrect">{{ counts.wrong }} wrong or partly</span>
+      <span class="badge badge-not_attempted">{{ counts.other }} unclear / not attempted</span>
+    </div>
+  </section>
+  {% if ai_result['flags_for_tutor'] %}
+  <div class="flags" role="note">
+    <strong>Check these:</strong>
+    <ul>{% for f in ai_result['flags_for_tutor'] %}<li>{{ f }}</li>{% endfor %}</ul>
+  </div>
   {% endif %}
+{% endif %}
 
-  <h2>Grade &amp; feedback for the student</h2>
-  {% if submission['feedback_published'] %}
-    <p class="badge badge-reviewed">Published to student</p>
-  {% endif %}
+<div class="review-layout">
+  <section class="photo-col card" aria-label="Student pages" style="padding: 16px">
+    {% for f in files %}
+      <a href="{{ url_for('admin.submission_file', submission_id=submission['id'], filename=f) }}" target="_blank" rel="noopener" aria-label="Open page {{ loop.index }} full size">
+        {% if f.lower().endswith('.pdf') %}<span class="file-tile" style="line-height: 1.4"><span class="ficon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"></path><path d="M14 2v6h6"></path></svg></span><span>{{ f }}</span></span>
+        {% else %}<img src="{{ url_for('admin.submission_file', submission_id=submission['id'], filename=f) }}" alt="Page {{ loop.index }}" loading="lazy">{% endif %}
+      </a>
+    {% else %}
+      <p class="muted" style="margin: 0">No files.</p>
+    {% endfor %}
+  </section>
 
+  <div class="tasks-col">
   {% if show_form and ai_pending %}
-  <p class="muted">Waiting for the AI recheck to finish before you can edit feedback — this page will update automatically.</p>
+    <div class="card"><p class="muted" style="margin: 0">Waiting for the AI recheck to finish before you can edit feedback.</p></div>
   {% elif show_form %}
   <form method="post" class="form">{{ csrf_field() }}
     {% if problems %}
     <input type="hidden" name="problem_count" value="{{ problems|length }}">
     <div class="problem-cards">
       {% for p in problems %}
-      <div class="problem-card">
-        <input type="hidden" name="problem_label_{{ loop.index0 }}" value="{{ p['problem_label'] }}">
-        <input type="hidden" name="problem_text_{{ loop.index0 }}" value="{{ p['problem_text'] }}">
-        <input type="hidden" name="confidence_{{ loop.index0 }}" value="{{ p['confidence'] }}">
+      {% set i = loop.index0 %}
+      {% set check = p.get('exact_check') %}
+      <article class="problem-card {{ 'flagged' if p['problem_label'] in ns.flagged }}">
+        <input type="hidden" name="problem_label_{{ i }}" value="{{ p['problem_label'] }}">
+        <input type="hidden" name="problem_text_{{ i }}" value="{{ p['problem_text'] }}">
+        <input type="hidden" name="confidence_{{ i }}" value="{{ p['confidence'] }}">
         <div class="problem-card-head">
-          <strong>{{ p['problem_label'] }}</strong>
-          <span class="badge badge-conf-{{ p['confidence'] }}">{{ p['confidence'] }} confidence</span>
-          <select name="verdict_{{ loop.index0 }}">
-            {% for v in ['correct', 'incorrect', 'partially_correct', 'unclear', 'not_attempted'] %}
-              <option value="{{ v }}" {{ 'selected' if p['verdict'] == v else '' }}>{{ v.replace('_', ' ') }}</option>
-            {% endfor %}
-          </select>
+          <div class="left">
+            <span class="label-tag">{{ p['problem_label'] }}</span>
+            {% if p['problem_text'] %}<span class="problem-card-text">{{ p['problem_text'] }}</span>{% endif %}
+          </div>
+          <div class="chips">
+            {% if check and check['key_matches'] == false %}<span class="badge badge-partially_correct">Key corrected by exact check</span>
+            {% elif check and check['student_matches'] is not none %}<span class="badge badge-correct">Checked exactly</span>{% endif %}
+            <span class="badge badge-conf-{{ p['confidence'] }}">{{ p['confidence'] }} confidence</span>
+          </div>
         </div>
-        {% if p['problem_text'] %}<p class="problem-card-text">{{ p['problem_text'] }}</p>{% endif %}
+        <fieldset class="seg-group">
+          <legend>Verdict for {{ p['problem_label'] }}</legend>
+          {% for value, label in verdict_labels %}
+          <label class="seg seg-{{ value }}"><input type="radio" name="verdict_{{ i }}" value="{{ value }}" {{ 'checked' if p['verdict'] == value }}><span>{{ label }}</span></label>
+          {% endfor %}
+        </fieldset>
         <div class="problem-card-row">
           <div class="problem-card-field">
-            <label>Student answer</label>
-            <textarea name="student_answer_{{ loop.index0 }}" rows="2">{{ p['student_answer'] }}</textarea>
+            <label for="sa-{{ i }}">Student answer</label>
+            <textarea id="sa-{{ i }}" name="student_answer_{{ i }}" rows="2">{{ p['student_answer'] }}</textarea>
           </div>
           <div class="problem-card-field">
-            <label>Correct answer</label>
-            <textarea name="correct_answer_{{ loop.index0 }}" rows="2">{{ p['correct_answer'] }}</textarea>
+            <label for="ca-{{ i }}">Correct answer</label>
+            <textarea id="ca-{{ i }}" name="correct_answer_{{ i }}" rows="2">{{ p['correct_answer'] }}</textarea>
           </div>
         </div>
         {% if p['work'] %}
-        <input type="hidden" name="work_{{ loop.index0 }}" value="{{ p['work'] }}">
+        <input type="hidden" name="work_{{ i }}" value="{{ p['work'] }}">
         <details class="spoiler">
           <summary>Show AI's work</summary>
           <div class="spoiler-content problem-card-work">{{ p['work'] }}</div>
         </details>
         {% endif %}
         <div class="problem-card-field">
-          <label>Explanation</label>
-          <textarea name="explanation_{{ loop.index0 }}" rows="2">{{ p['explanation'] }}</textarea>
+          <label for="ex-{{ i }}">Explanation for {{ student['name'] }}{% if student['language'] == 'ru' %} (shown in Russian){% endif %}</label>
+          <textarea id="ex-{{ i }}" name="explanation_{{ i }}" rows="2">{{ p['explanation'] }}</textarea>
         </div>
         <div class="problem-card-field">
-          <label>Note for AI</label>
-          <textarea name="ai_note_{{ loop.index0 }}" rows="2" placeholder="e.g. -1 is greater than -√3, this order is wrong"></textarea>
+          <label for="note-{{ i }}">Note for AI <span class="muted">(only used by "Recheck with AI")</span></label>
+          <textarea id="note-{{ i }}" name="ai_note_{{ i }}" rows="1" placeholder="e.g. -1 is greater than -√3, this order is wrong"></textarea>
         </div>
-      </div>
+      </article>
       {% endfor %}
     </div>
-    <div class="form-row">
+    <div class="card card-soft" style="padding: 16px 18px">
+      <p class="hint">"Recheck with AI" re-grades the whole submission. Spotted a mistake? Add a note in "Note for AI" on those task(s) first so the AI looks at them closely; leave all notes blank for a plain re-grade.</p>
       <button type="submit" formaction="{{ url_for('admin.regrade_submission', submission_id=submission['id']) }}" class="button-secondary"
               onclick="return confirm('The AI will re-grade the whole submission and replace the verdicts, correct answers and explanations in this table. Student answers you corrected by hand are kept. Continue?');">Recheck with AI</button>
     </div>
     {% endif %}
 
-    <label>
-      Grade
-      <select name="grade">
-        <option value="">— pick a grade —</option>
-        {% for g in ['A', 'B', 'C', 'D', 'F'] %}
-          <option value="{{ g }}" {{ 'selected' if submission['tutor_grade'] == g else '' }}>{{ g }}</option>
-        {% endfor %}
-      </select>
-    </label>
-    <textarea name="tutor_comment" rows="4" placeholder="Comment the student will see...">{{ submission['tutor_comment'] or '' }}</textarea>
-    <div class="form-row">
-      <button type="submit" name="action" value="draft" class="button-secondary">Save draft</button>
-      <button type="submit" name="action" value="publish">Publish feedback to student</button>
-    </div>
+    <section class="card" aria-labelledby="publish-title">
+      <h2 id="publish-title">Grade &amp; feedback</h2>
+      <div class="publish-bar">
+        <fieldset class="seg-group">
+          <legend>Grade</legend>
+          {% for g in ['A', 'B', 'C', 'D', 'F'] %}
+          <label class="seg seg-grade"><input type="radio" name="grade" value="{{ g }}" {{ 'checked' if submission['tutor_grade'] == g }}><span>{{ g }}</span></label>
+          {% endfor %}
+        </fieldset>
+        <label style="flex: 2 1 320px">
+          Comment {{ student['name'] }} will see
+          <textarea name="tutor_comment" rows="3" placeholder="Write a short comment for the student">{{ submission['tutor_comment'] or '' }}</textarea>
+        </label>
+      </div>
+      <div class="form-actions" style="justify-content: flex-end">
+        <button type="submit" name="action" value="draft" class="button-secondary">Save draft</button>
+        <button type="submit" name="action" value="publish" class="button-lg">Publish to {{ student['name'] }}</button>
+      </div>
+    </section>
   </form>
   {% else %}
-  {% if problems %}
-  <div class="table-wrap">
-  <table class="table">
-    <thead>
-      <tr><th>Problem</th><th>Student answer</th><th>Correct answer</th><th>Verdict</th><th>Explanation</th></tr>
-    </thead>
-    <tbody>
+    <div class="problem-cards">
       {% for p in problems %}
-      <tr>
-        <td><strong>{{ p['problem_label'] }}</strong><br><span class="muted">{{ p['problem_text'] }}</span></td>
-        <td>{{ p['student_answer'] | wrap_math }}</td>
-        <td>{{ p['correct_answer'] | wrap_math }}</td>
-        <td><span class="badge badge-{{ p['verdict'] }}">{{ p['verdict'].replace('_', ' ') }}</span></td>
-        <td>{{ p['explanation'] or '—' }}</td>
-      </tr>
+      <article class="problem-card">
+        <div class="problem-card-head">
+          <div class="left">
+            <span class="label-tag">{{ p['problem_label'] }}</span>
+            {% if p['problem_text'] %}<span class="problem-card-text">{{ p['problem_text'] }}</span>{% endif %}
+          </div>
+          <span class="badge badge-{{ p['verdict'] }}">{{ p['verdict'].replace('_', ' ') }}</span>
+        </div>
+        <div class="problem-card-row">
+          <div><div class="field-label">Student answer</div>{{ p['student_answer'] | wrap_math }}</div>
+          <div><div class="field-label">Correct answer</div>{{ p['correct_answer'] | wrap_math }}</div>
+        </div>
+        {% if p['explanation'] %}<p style="margin: 0">{{ p['explanation'] }}</p>{% endif %}
+      </article>
       {% endfor %}
-    </tbody>
-  </table>
+    </div>
+    <section class="card">
+      <div class="section-head">
+        <h2>Published grade</h2>
+        <div class="grade-stamp">{{ submission['tutor_grade'] }}</div>
+      </div>
+      {% if submission['tutor_comment'] %}<p style="margin: 0; white-space: pre-line">{{ submission['tutor_comment'] }}</p>{% else %}<p class="muted" style="margin: 0">No comment left.</p>{% endif %}
+      <a href="{{ url_for('admin.submission_detail', submission_id=submission['id'], edit=1) }}" class="button button-secondary button-accent">Edit feedback</a>
+    </section>
+  {% endif %}
   </div>
-  {% endif %}
-  <p><span class="badge badge-{{ submission['tutor_grade'] }}">{{ submission['tutor_grade'] }}</span></p>
-  {% if submission['tutor_comment'] %}
-    <p>{{ submission['tutor_comment'] }}</p>
-  {% else %}
-    <p class="muted">No comment left.</p>
-  {% endif %}
-  <a href="{{ url_for('admin.submission_detail', submission_id=submission['id'], edit=1) }}" class="button button-secondary button-accent">Edit feedback</a>
-  {% endif %}
 </div>
 
-<div class="card wide">
-  <h2>Danger zone</h2>
-  <p class="muted">Permanently deletes this submission and its uploaded files. This cannot be undone.</p>
+<section class="card" aria-labelledby="danger-title">
+  <h2 id="danger-title" style="font-size: 1.2rem">Danger zone</h2>
+  <p class="muted" style="margin: 0">Permanently deletes this submission and its uploaded files. This cannot be undone.</p>
   <form method="post" action="{{ url_for('admin.delete_submission', submission_id=submission['id']) }}"
         onsubmit="return confirm('Delete this submission? This cannot be undone.');">{{ csrf_field() }}
     <button type="submit" class="button-danger">Delete submission</button>
   </form>
-</div>
+</section>
 
 {% if ai_pending %}
 <script>

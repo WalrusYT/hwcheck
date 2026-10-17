@@ -1,62 +1,62 @@
 {% extends "base.html" %}
-{% block title %}Dashboard - TutorIlya Homework{% endblock %}
+{% block title %}Submissions - TutorIlya Homework{% endblock %}
+{% block header %}{% include "admin/_nav.html" %}{% endblock %}
 {% block content %}
-{% include "admin/_nav.html" %}
-
-<div class="card wide">
-  <h1>Submissions</h1>
-  <div class="tabs">
-    <a href="{{ url_for('admin.dashboard', status='new') }}" class="tab {{ 'tab-active' if status == 'new' }}">New ({{ new_count }})</a>
-    <a href="{{ url_for('admin.dashboard', status='graded') }}" class="tab {{ 'tab-active' if status == 'graded' }}">Graded ({{ graded_count }})</a>
-    <a href="{{ url_for('admin.dashboard', status='all') }}" class="tab {{ 'tab-active' if status == 'all' }}">All ({{ new_count + graded_count }})</a>
+<div class="page-head">
+  <div><h1>Submissions</h1></div>
+  <div class="stats">
+    <div class="stat stat-big"><strong style="color: var(--blue-deep)">{{ new_count }}</strong><span>to review</span></div>
+    <div class="stat stat-big"><strong>{{ graded_count }}</strong><span>graded</span></div>
   </div>
-  {% if not submissions %}
-    <p class="muted">
-      {% if status == 'new' %}No new submissions.
-      {% elif status == 'graded' %}No graded submissions yet.
-      {% else %}No submissions yet.{% endif %}
-    </p>
-  {% else %}
-  <div class="table-wrap">
-  <table class="table">
-    <thead>
-      <tr>
-        <th>Status</th>
-        <th>Student</th>
-        <th>Homework</th>
-        <th>Submitted</th>
-        <th>AI result</th>
-        <th></th>
-        <th></th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for s in submissions %}
-      <tr class="{{ 'row-new' if not s['feedback_published'] else '' }}">
-        <td>
-          {% if s['feedback_published'] %}<span class="badge badge-reviewed">Reviewed ({{ s['tutor_grade'] }})</span>
-          {% else %}<span class="badge badge-new">New</span>{% endif %}
-        </td>
-        <td>{{ s['student_name'] }}</td>
-        <td>{{ s['assignment_title'] }}</td>
-        <td>{{ s['submitted_at'] }}</td>
-        <td>
-          {% if s['ai_status'] == 'done' %}<span class="badge badge-done">Ready</span>
-          {% elif s['ai_status'] == 'error' %}<span class="badge badge-error">Error</span>
-          {% else %}<span class="badge">Pending</span>{% endif %}
-        </td>
-        <td><a href="{{ url_for('admin.submission_detail', submission_id=s['id']) }}" class="button button-secondary button-accent">View →</a></td>
-        <td>
-          <form method="post" action="{{ url_for('admin.delete_submission', submission_id=s['id']) }}"
-                onsubmit="return confirm('Delete this submission? This cannot be undone.');">{{ csrf_field() }}
-            <button type="submit" class="button button-secondary button-danger">Delete</button>
-          </form>
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  </div>
-  {% endif %}
 </div>
+
+<nav class="tabs" aria-label="Filter submissions">
+  <a href="{{ url_for('admin.dashboard', status='new') }}" class="tab {{ 'tab-active' if status == 'new' }}" {{ 'aria-current="page"' | safe if status == 'new' }}>New · {{ new_count }}</a>
+  <a href="{{ url_for('admin.dashboard', status='graded') }}" class="tab {{ 'tab-active' if status == 'graded' }}" {{ 'aria-current="page"' | safe if status == 'graded' }}>Graded · {{ graded_count }}</a>
+  <a href="{{ url_for('admin.dashboard', status='all') }}" class="tab {{ 'tab-active' if status == 'all' }}" {{ 'aria-current="page"' | safe if status == 'all' }}>All · {{ new_count + graded_count }}</a>
+</nav>
+
+{% if not submissions %}
+  <div class="card"><p class="muted" style="margin: 0">
+    {% if status == 'new' %}No new submissions - you're all caught up.
+    {% elif status == 'graded' %}No graded submissions yet.
+    {% else %}No submissions yet.{% endif %}
+  </p></div>
+{% else %}
+<ul class="sub-list">
+  {% for s in submissions %}
+  {% set result = (s['ai_result'] | fromjson) if s['ai_result'] else None %}
+  {% set flag_count = (result['flags_for_tutor'] | length) if result else 0 %}
+  {% set file_count = (s['files'] | fromjson | length) if s['files'] else 0 %}
+  <li class="sub-row {{ 'published' if s['feedback_published'] }}">
+    <div class="sub-who">
+      <span class="avatar-tile" aria-hidden="true">{{ s['student_name'][:2] }}</span>
+      <div style="min-width: 0"><strong>{{ s['student_name'] }}</strong></div>
+    </div>
+    <div class="sub-what">
+      <strong>{{ s['assignment_title'] }}</strong>
+      <span class="meta">{{ s['submitted_at'] }} · {{ file_count }} file{{ 's' if file_count != 1 }}</span>
+    </div>
+    {% if s['feedback_published'] %}
+      <span class="badge badge-reviewed">Published · {{ s['tutor_grade'] }}</span>
+    {% elif s['ai_status'] == 'done' and flag_count %}
+      <span class="badge badge-partially_correct">Draft · {{ flag_count }} flag{{ 's' if flag_count != 1 }} to check</span>
+    {% elif s['ai_status'] == 'done' %}
+      <span class="badge badge-correct">Draft ready{% if result and result['estimated_score'] %} · {{ result['estimated_score'] }}{% endif %}</span>
+    {% elif s['ai_status'] == 'error' %}
+      <span class="badge badge-error">AI failed - grade by hand or retry</span>
+    {% else %}
+      <span class="badge badge-pending">AI is checking…</span>
+    {% endif %}
+    <div class="sub-actions">
+      <a href="{{ url_for('admin.submission_detail', submission_id=s['id']) }}" class="button {{ 'button-secondary' if s['feedback_published'] }}">{{ 'Open' if s['feedback_published'] else 'Review' }}</a>
+      <form method="post" action="{{ url_for('admin.delete_submission', submission_id=s['id']) }}"
+            onsubmit="return confirm('Delete this submission? This cannot be undone.');">{{ csrf_field() }}
+        <button type="submit" class="button-secondary button-danger" aria-label="Delete submission from {{ s['student_name'] }}">Delete</button>
+      </form>
+    </div>
+  </li>
+  {% endfor %}
+</ul>
+{% endif %}
 {% endblock %}
