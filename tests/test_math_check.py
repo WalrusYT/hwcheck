@@ -55,6 +55,42 @@ def test_a_decimal_comma_is_one_number_not_two_solutions():
     assert math_check.check("equation", "x^2-5*x+6=0", "2, 3", "2,3").student_matches is True
 
 
+def test_values_the_sheet_gives_are_not_mistaken_for_a_wrong_key():
+    """Real case ("Sabendo que log2 a = 5, determina log2(√2·a)"): the expression still
+    contains a, the key 11/2 doesn't, so the check called the key wrong, replaced it
+    with log(a)/log(2) + 1/2 and failed the student's correct 11/2."""
+    result = math_check.check("number", "ln(2^(1/2)*a)/ln(2)", "11/2", "11/2")
+    assert (result.student_matches, result.key_matches, result.reference_latex) == (True, None, None)
+    assert math_check.check("number", "ln(x^2*y)/ln(10)", "7", "7").student_matches is True
+    # "log2 9 = x - write log2 64 - log2 27 in terms of x": the key brings in x
+    assert math_check.check("expression", "ln(64)/ln(2)-ln(27)/ln(2)", "6-3*x/2", "6-3*x/2").student_matches is True
+    wrong = math_check.check("expression", "ln(6)/ln(2)", "1+x/2", "x/2")
+    assert (wrong.student_matches, wrong.key_matches) == (False, None)
+
+
+def test_log_identities_that_need_positive_arguments_are_recognised():
+    """Real case: ln(x²-y²) - 2ln(√(x-y)) = ln(x+y) for x > y > 0, but sympy can't
+    simplify it without knowing the signs - the right key was "corrected" into the
+    unsimplified expression and its explanation deleted."""
+    result = math_check.check("expression", "ln(x^2-y^2)-2*ln((x-y)^(1/2))", "ln(x+y)",
+                              "ln(x^2-y^2)/ln(abs(x-y))")
+    assert (result.key_matches, result.student_matches) == (True, False)
+    assert result.reference_latex == "\\log{\\left(x + y \\right)}"
+
+
+def test_a_log_without_a_base_is_not_guessed():
+    # school "log" is base 10, sympy's is base e: log(100) = 2 was "checked" as 2·ln(10)
+    assert math_check.parse("log(100)") is None
+    assert math_check.check("number", "log(100)", "2", "2").student_matches is True
+
+
+def test_one_of_several_true_options_is_left_to_the_grader():
+    """Real case: a flawed multiple-choice question had three true options; the key
+    listed all three, the student chose one of them and was marked incorrect."""
+    assert math_check.check("choice", "", "B; C; D", "C").student_matches is None
+    assert math_check.check("choice", "", "B; C; D", "A").student_matches is False
+
+
 def test_unparseable_input_gives_no_opinion():
     assert math_check.check("expression", "\\frac{x}{y}", "", "").student_matches is None
     assert math_check.check("proof", "", "", "").student_matches is None

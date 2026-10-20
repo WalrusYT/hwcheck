@@ -109,6 +109,23 @@ one; after unique labels + checker fixes 12 of 13 in every run on gpt-4o and
 gpt-5.5 (the 13th is genuinely wrong). Known gpt-4o grading slip that remains:
 `pt_dizimas` #10, a correct ordering chain marked incorrect (gpt-5.5: correct).
 
+2026-10-19/20, 10 cases (4 new with sheets: series, logs on dark photos, two
+PT sheets; a mock test with sheet + tutor key). **Reading is the main error
+source**: gpt-4o reads faint/dark photos as the *right* answers (5^5 for a
+written 5, 7 for -11) - 8-10 false "correct" per run on the new cases, which no
+grader can undo. gpt-6.1-sol reads verbatim and flags what it can't read
+(two readings disagree); gpt-6-astra reads as well at ~3x the price; gpt-5.5
+reads well but 3 of its 4 slips moved toward the right answer; gpt-6-luna
+can't read. Graders on one shared reading: gpt-5.5 best explanations,
+gpt-6.1-sol / astra as thorough but stricter on unevaluated powers and
+intermediate steps (partially_correct where the tutor may say correct), gpt-4o
+misses sheet requirements and ignores the student's language. After the
+math_check fix (sheet-given values, ln identities) and with the tutor key in
+the prompt: gpt-6.1-sol 0 false correct on every completed case; mock test
+16/18 (II.2 unclear: two readings ordered the same parts differently). Cost per
+homework: 4o ~$0.13, 6.1-sol ~$0.20, 5.5 ~$0.70, astra ~$0.90. Eval runs
+drained the shared OpenAI balance once - check it before a big run.
+
 With no task sheet the problem is only inferred from the student's work, so
 the no-sheet rule turns non-correct verdicts into `unclear`. Cases with the
 real sheet attached are the biggest missing piece of this eval set - add them.

@@ -40,8 +40,9 @@ Production facts:
   not raise `--workers` without moving jobs to a real queue first.
 - Env vars: `OPENAI_API_KEY`, `ADMIN_PASSWORD` (>= 12 chars), `FLASK_SECRET_KEY`,
   `OPENAI_MODEL` (default model, gpt-4o), optional `OPENAI_TRANSCRIBE_MODEL` /
-  `OPENAI_GRADE_MODEL` (per grading stage; evals favour gpt-4o reading +
-  `OPENAI_GRADE_MODEL=gpt-5.5` - gpt-4o gets university-level answers wrong). A past outage came from an
+  `OPENAI_GRADE_MODEL` (per grading stage; evals 2026-10-20 favour gpt-6.1-sol
+  for both - gpt-4o reads faint or dark photos as the right answers and gets
+  university-level answers wrong). A past outage came from an
   `OPENAI_API_KEY` value with an embedded newline: inspect env vars by
   length/whitespace, never print them. Env changes need a new deploy to apply.
 - Render MCP tools, when loaded, are for read-only inspection (logs, deploys,
@@ -101,21 +102,27 @@ Russian register is always «ты».
    verbatim. Runs twice, one after the other (temperature 0 and 0.7), on the
    full page plus 3 overlapping horizontal strips. Multi-part answers are kept
    whole ("inf = ..; sup = .."), crossed-out writing is dropped.
-2. **Labels**: `clean_label` keeps only a printed number/letter; problems the
+2. **Labels**: `clean_label` keeps only a printed number/letter (a sub-item
+   carries its exercise number: "2a", "1.3"); problems the
    sheet prints without one become `#1`, `#2`, ... (`with_unique_labels`).
    Everything downstream is keyed by label - duplicates or blanks once made
    seven problems grade as one.
 3. **Reconcile**: readings are paired by label, else by the printed problem
    text. A disagreement makes the problem `unclear` and flagged - a misread is
-   never graded. Exceptions that are not disagreements: notation synonyms, a
-   misread variable letter, and multi-part answers that differ in only some
-   parts (graded, with those parts passed on as `read_two_ways`).
+   never graded. Exceptions that are not disagreements: notation synonyms and
+   LaTeX spellings (`\frac x2`, "C.S."), a misread variable letter, a work line
+   one reading kept before the same result, and multi-part answers that differ
+   in only some parts (graded, with those parts passed on as `read_two_ways`).
 4. **Grade**: sees the transcription plus the printed sheet (never the
    student's pages); blank problems are not sent. Verdicts in the student's
    language and curriculum; every part of a multi-part problem is checked.
 5. **Exact check**: `math_check` verifies expressions/equations with sympy
    (implicit multiplication and decimal commas accepted) and overrules the
    model, including a wrong answer key - whose explanation is then removed.
+   It only compares key and student when the answer depends on what the
+   expression doesn't carry (values the sheet gives: "log2 a = 5"; "in terms
+   of x"), never parses a bare `log` (school log is base 10), and confirms
+   identities sympy can't simplify (ln(x²-y²)-ln(x-y)) at sample points.
    What the checker was given is stored per problem as `exact_check`.
 6. **No-sheet rule**: without a task sheet the problem itself is only inferred,
    so `incorrect`/`partially_correct` become `unclear`; `correct` stands.

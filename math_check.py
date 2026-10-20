@@ -4,6 +4,7 @@ The model's own verdict is a guess; when a problem and the answers can be
 parsed as plain math, the result here is exact and overrules it.
 """
 
+import random
 import re
 from dataclasses import dataclass
 from typing import Optional
@@ -18,8 +19,11 @@ MAX_LENGTH = 200
 # math characters, single-letter variables and a fixed set of function names
 # ever reach the parser.
 _SAFE_CHARS = re.compile(r"^[0-9A-Za-z+\-*/^().,=\s]*$")
+# No "log": at school it is base 10, in sympy base e, so log(100) = 2 was "checked"
+# against 2*ln(10). The grader writes ln(x) and ln(x)/ln(b); an expression with a bare
+# log isn't checked at all.
 _FUNCTIONS = {"sqrt": sympy.sqrt, "sin": sympy.sin, "cos": sympy.cos, "tan": sympy.tan,
-              "log": sympy.log, "ln": sympy.log, "exp": sympy.exp, "abs": sympy.Abs, "pi": sympy.pi}
+              "ln": sympy.log, "exp": sympy.exp, "abs": sympy.Abs, "pi": sympy.pi}
 # implicit_multiplication: models (and people) write 4(2m-1)+3m, not 4*(2*m-1)+3*m; without
 # it such an equation didn't parse and the exact check was silently skipped.
 _TRANSFORMS = standard_transformations + (convert_xor, implicit_multiplication)
@@ -59,9 +63,43 @@ def equivalent(a, b) -> Optional[bool]:
         if difference == 0:
             return True
         result = difference.equals(0)
-        return bool(result) if result is not None else None
     except Exception:
+        result = None
+    if result is not True:
+        # ln(x²-y²) - ln(x-y) = ln(x+y) holds wherever both sides are defined, but sympy
+        # won't simplify it without knowing the signs - so compare values at real points.
+        numeric = _equal_at_sample_points(a, b)
+        if numeric is not None:
+            return numeric
+    return bool(result) if result is not None else None
+
+
+def _equal_at_sample_points(a, b, tries=60, needed=6) -> Optional[bool]:
+    """True when a and b agree at `needed` random points where both are real; False at
+    the first real point where they differ; None when too few such points were found."""
+    symbols = sorted(a.free_symbols | b.free_symbols, key=str)
+    if not symbols:
         return None
+    rng = random.Random(0)  # same points every run: a verdict must not flicker
+    agreed = 0
+    for _ in range(tries):
+        point = {s: sympy.Rational(rng.randint(-500, 500), 100) for s in symbols}
+        try:
+            va, vb = complex(a.evalf(subs=point)), complex(b.evalf(subs=point))
+        except (TypeError, ValueError, ZeroDivisionError):
+            continue
+        if abs(va.imag) > 1e-12 or abs(vb.imag) > 1e-12 or not all(map(_finite, (va.real, vb.real))):
+            continue
+        if abs(va.real - vb.real) > 1e-9 * max(1.0, abs(va.real)):
+            return False
+        agreed += 1
+        if agreed >= needed:
+            return True
+    return None
+
+
+def _finite(value):
+    return value == value and abs(value) != float("inf")
 
 
 def _parse_solution_set(text):
@@ -140,7 +178,11 @@ def check(kind, problem_expr, correct_expr, student_expr) -> Check:
     """kind: expression | equation | number | choice | true_false | other."""
     if kind == "choice":
         want, got = _letters(correct_expr), _letters(student_expr)
-        return Check(student_matches=(want == got) if want and got else None)
+        if not (want and got) or want == got:
+            return Check(student_matches=True if want and got else None)
+        # One of several right letters: a question with more than one true option (or a
+        # multi-select left incomplete) - which it is, only the grader can tell.
+        return Check(student_matches=False if set(got) - set(want) else None)
     if kind == "true_false":
         want, got = _true_false(correct_expr), _true_false(student_expr)
         return Check(student_matches=(want == got) if want and got else None)
@@ -161,12 +203,36 @@ def check(kind, problem_expr, correct_expr, student_expr) -> Check:
         key = _parse_number_or_expression(correct_expr)
         if problem is None:
             return Check(student_matches=equivalent(student, key))
-        try:
-            reference = sympy.latex(sympy.simplify(problem))
-        except Exception:
-            reference = None
+        reference = _simplest(problem)
+        substituted = key is not None and bool(key.free_symbols - reference.free_symbols)
+        if substituted or (kind == "number" and reference.free_symbols):
+            # The answer depends on something the expression doesn't carry: a substitution
+            # ("log2 9 = x - write it in terms of x") or values the sheet gives elsewhere (a
+            # number answer to an expression in a: "log2 a = 5"). The expression alone
+            # can't judge the key; only key and student can be compared.
+            return Check(student_matches=equivalent(student, key))
         return Check(student_matches=equivalent(student, problem),
                      key_matches=equivalent(key, problem),
-                     reference_latex=reference)
+                     reference_latex=sympy.latex(reference))
 
     return Check()
+
+
+def _simplest(expr):
+    """The expression as a key a student would write. simplify() leaves
+    ln(x²-y²) - ln(x-y) alone (it can't know x > y > 0); combining the logs gives
+    ln(x+y) - unless that form is worse, e.g. ln(a)/ln(2) turning into a power of
+    1/ln(2)."""
+    try:
+        simplest = sympy.simplify(expr)
+    except Exception:
+        return expr
+    if expr.has(sympy.log):
+        try:
+            combined = sympy.simplify(sympy.logcombine(expr, force=True))
+        except Exception:
+            combined = None
+        if (combined is not None and sympy.count_ops(combined) < sympy.count_ops(simplest)
+                and not any(power.exp.has(sympy.log) for power in combined.atoms(sympy.Pow))):
+            simplest = combined
+    return simplest

@@ -76,8 +76,12 @@ written, e.g. "A V; B F; C F; F V".
 in its order, with its exact printed labels. Any the student did not answer: \
 found = false and empty answers.
 - label is ONLY the number or letter printed next to the problem ("7", "9a", \
-"b)") - never the problem itself. A problem the sheet prints with no number \
-or letter gets an empty label; keep such problems in the sheet's order.
+"b)") - never the problem itself. A sub-item printed under a numbered exercise \
+carries that number too: item a) of exercise 2 is "2a", item 3 of exercise 1 \
+is "1.3"; labels printed in full, like "1.1", stay as printed. A sheet that \
+numbers its problems again in each part (Part I 1-6, Part II 1-3) puts the \
+part first: "I.1", "II.1". A problem the sheet prints with no number or letter \
+gets an empty label; keep such problems in the sheet's order.
 - If there is no sheet, labels are the student's own, combining the exercise \
 number and the letter exactly as written: "№58 а)" becomes "58а" (keep Cyrillic \
 letters Cyrillic). Answers with no visible label get "?". Never number the \
@@ -194,7 +198,7 @@ _CYRILLIC_LOOKALIKES = str.maketrans("асеорх", "aceopx")
 
 def normalize_label(label):
     label = (label or "").lower().translate(_CYRILLIC_LOOKALIKES)
-    return re.sub(r"[\s№()q]|n°|ex", "", label)
+    return re.sub(r"[\s№()q]|n°|ex", "", label).rstrip(".")  # "1.1." is 1.1
 
 
 _CROSSED_OUT = re.compile(
@@ -211,16 +215,18 @@ def normalize_answer(text):
     text = _CROSSED_OUT.sub("", text or "")
     text = _EMPTY_SET.sub("∅", text)
     text = re.sub(r"[−–—]", "-", text).replace("·", "*").replace("\\cdot", "*").replace("\\times", "*")
+    # \sqrt y and \frac x2 are LaTeX too - one reading writes them so, the other with braces
+    text = re.sub(r"\\sqrt\s*(?:\{([^{}]*)\}|([A-Za-z0-9]))", r"√(\1\2)", text)
     previous = None
     while previous != text:
         previous = text
-        text = re.sub(r"\\[dt]?frac\{([^{}]*)\}\{([^{}]*)\}", r"(\1)/(\2)", text)
+        text = re.sub(r"\\[dt]?frac\s*(?:\{([^{}]*)\}|([A-Za-z0-9]))\s*(?:\{([^{}]*)\}|([A-Za-z0-9]))",
+                      r"(\1\2)/(\3\4)", text)
     for token in ("\\(", "\\)", "\\[", "\\]", "\\left", "\\right", "\\,", "\\;", "\\!", "\\ "):
         text = text.replace(token, "")
     return re.sub(r"[{}()\s]", "", text).lower()
 
 
-_VARIABLE_PREFIX = re.compile(r"^[a-zа-я]=")
 _PART_NAME_NOISE = re.compile(r"\\(?:text|mathrm|operatorname)\b|[\\{}\s]")
 
 
@@ -250,9 +256,41 @@ def _readings_agree(first, second):
         # matters is that no part both readings saw was read differently.
         shared = parts_a.keys() & parts_b.keys()
         return bool(shared) and all(parts_a[k][0] == parts_b[k][0] for k in shared)
-    # "x = 0,4" vs "m = 0,4": a handwritten variable letter read two ways is not a
-    # different answer - compare what comes after "letter =".
-    return _VARIABLE_PREFIX.sub("", normalize_answer(a)) == _VARIABLE_PREFIX.sub("", normalize_answer(b))
+    results_a, results_b = _results(a), _results(b)
+    shorter, longer = sorted((results_a, results_b), key=len)
+    # One reading sometimes keeps the work line in front of the result ("Sum = a/(1-r) =
+    # -3/11" vs "sum = -3/11"), or as a segment of its own: what must agree is every
+    # result the shorter reading has, and the last one.
+    return (_same_result(results_a[-1], results_b[-1])
+            and all(any(_same_result(r, other) for other in longer) for r in shorter))
+
+
+_SOLUTION_SET = re.compile(r"^c\.?s\.?=?(?=[\\\d\-∅])")   # "C.S. {4}", "C.S={4}", "CS = 5"
+_BARE_NAME = re.compile(r"^[a-zа-я.]+$")
+
+
+def _results(answer):
+    """[(name, value)] for each "; "-separated segment of a reading: the value after its
+    last "=" and what stands before the first one (a name like sum, x, cs - or work)."""
+    results = []
+    for segment in re.split(r";\s+", answer or ""):
+        text = _SOLUTION_SET.sub("cs=", normalize_answer(segment))
+        name, _, rest = text.partition("=")
+        results.append((name.lstrip("\\"), rest.rpartition("=")[2]) if rest else ("", text))
+    return results
+
+
+def _same_result(a, b):
+    """Same value, and names that don't contradict: "x = 0,4" vs "m = 0,4" (a misread
+    variable letter), "sum = 2" vs "\\sum ... = 2" - but not "3x = 6" vs "x = 6", nor a
+    step read two ways ("180-146=34" vs "180-136=34")."""
+    (name_a, value_a), (name_b, value_b) = a, b
+    if value_a != value_b:
+        return False
+    if name_a == name_b or not name_a or not name_b:
+        return True
+    bare_a, bare_b = bool(_BARE_NAME.match(name_a)), bool(_BARE_NAME.match(name_b))
+    return (bare_a and bare_b) or (bare_a and name_b.startswith(name_a)) or (bare_b and name_a.startswith(name_b))
 
 
 def _parts_read_two_ways(a, b):
@@ -278,7 +316,7 @@ def clean_label(label):
     """Only the printed number or letter of a problem. For a problem printed with no
     number, the model sometimes returns "" and sometimes the whole equation (or
     "b) x/3 = 5"); anything that isn't a short number/letter counts as no label."""
-    label = (label or "").strip()
+    label = re.sub(r"(?<=\w)\.$", "", (label or "").strip())  # "1.1." -> "1.1"
     looks_like_math = "=" in label or "\\" in label or len(label) > 12
     if not looks_like_math:
         return "" if label == "?" else label
@@ -390,10 +428,13 @@ the label it has in the transcription (labels like "#3" mark problems the sheet 
 prints without a number - the third unnumbered one).
 
 For each problem:
-- Solve it yourself in "work", step by step (common denominators, expansion, \
-cancellation, the sign flip when rewriting 4-x as -(x-4), ...), then \
-double-check each step. A dropped sign or cross-term produces a \
-confident-looking wrong answer.
+- If the tutor's solutions (answer key) are attached and cover the problem, \
+they are the answer: in "work", write the key's answer and compare the \
+student's answer and steps with it, part by part - do not solve the problem \
+again. Otherwise solve it yourself in "work", step by step (common \
+denominators, expansion, cancellation, the sign flip when rewriting 4-x as \
+-(x-4), ...), then double-check each step. A dropped sign or cross-term \
+produces a confident-looking wrong answer.
 - A problem that asks for several things (e.g. interior, limit points, \
 closure, bounds, infimum, supremum, minimum, maximum; or several results): in \
 work, go through EVERY requested part - your answer, then the student's \
@@ -402,9 +443,9 @@ test the extreme cases (n = 1, m = 1, endpoints), and for a maximum or minimum \
 check that some element of the set actually equals it. verdict "correct" only \
 if every part matches; "partially_correct" if some do; "incorrect" if none or \
 almost none do. The explanation names the parts that are wrong.
-- correct_answer: the final result of your work. If tutor solutions are \
-attached, use them as the ground truth for correct_answer, and add a note to \
-flags_for_tutor for any key entry that looks wrong.
+- correct_answer: the key's answer when the tutor's solutions cover the \
+problem, otherwise the final result of your work. If a key entry looks wrong \
+to you, still use it and say why in flags_for_tutor.
 - verdict: "correct"; "incorrect"; "partially_correct" (right method with a \
 slip, or right value not fully simplified when the task required it); \
 "unclear" (you cannot determine the answer, or the transcription marks the \
@@ -415,8 +456,8 @@ Write it in {language} - the student's own language, whatever language the \
 sheet is printed in - keeping only the curriculum's terms and notation as \
 their school writes them.
 - Machine-checkable forms, in plain ASCII with explicit * for multiplication, \
-^ for powers and single-letter variables (e.g. (x-5)/(y-1), 2*a*(4*x+y)); \
-use an empty string when not applicable:
+^ for powers, single-letter variables and ln(x) for logarithms (ln(x)/ln(b) for \
+base b) (e.g. (x-5)/(y-1), 2*a*(4*x+y)); use an empty string when not applicable:
   problem_expr: the expression to simplify or compute, or the equation \
 "lhs = rhs" to solve;
   correct_expr and student_expr: the final answers in that syntax, with a \
@@ -520,10 +561,29 @@ def grade_transcription(problems, student_name, topic, curriculum, language, she
 
 # ---- Stage 4: exact checks + assembling the result -------------------------
 
+_OPTION_LETTER = re.compile(r"^\(?([A-Ha-h])\)?[.)]?$")
+
+
+def _option_letter(text):
+    """"D", "(d)", "D)" -> "D"; anything longer -> None."""
+    match = _OPTION_LETTER.match(re.sub(r"\\[()\[\]]|\s", "", text or ""))
+    return match.group(1).upper() if match else None
+
+
 def apply_exact_check(problem, graded, flags):
     """Let sympy overrule the model's verdict where the math can be checked exactly."""
     import math_check  # sympy is ~30 MB: load it in the worker that grades, not at app import
     if problem["verdict"] in ("not_attempted", "unclear"):
+        return
+    # The checks below compare the grader's own restatement of the answers. For a
+    # chosen option the reading itself is the answer: gpt-4o once called a question
+    # "text" (or copied the student's D as B) and passed a D against its key B.
+    chosen = _option_letter(problem["student_answer"])
+    key = _option_letter(graded["correct_expr"]) or _option_letter(graded["correct_answer"])
+    if chosen and key and chosen != key and problem["verdict"] in ("correct", "partially_correct"):
+        flags.append(f"{problem['problem_label']}: the student chose {chosen}, the AI's answer is {key} - "
+                     "marked incorrect.")
+        problem["verdict"] = "incorrect"
         return
     result = math_check.check(graded["answer_kind"], graded["problem_expr"],
                               graded["correct_expr"], graded["student_expr"])

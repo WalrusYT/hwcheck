@@ -283,6 +283,7 @@ def test_unnumbered_problems_are_each_read_and_graded_on_their_own(fake_llm, pag
     ("\\(7y - 10 = y + 50\\)", ""),
     ("b) \\frac{x}{3} = 5", "b)"),                # letter + the equation: keep the letter
     ("(8) a)", "(8) a)"), ("9a", "9a"), ("10.2", "10.2"), ("№58 а)", "№58 а)"), ("", ""), ("?", ""),
+    ("1.1.", "1.1"), ("4.", "4"),                 # gpt-6.1-sol ends printed numbers with a dot
 ])
 def test_a_label_is_only_the_printed_number_or_letter(label, cleaned):
     assert grading.clean_label(label) == cleaned
@@ -332,6 +333,78 @@ def test_a_misread_variable_letter_is_not_a_disagreement():
 
 def test_bracketed_labels_match_plain_ones():
     assert grading.normalize_label("(8)a)") == grading.normalize_label("8a") == grading.normalize_label("8 a)")
+    assert grading.normalize_label("1.1.") == grading.normalize_label("1.1")
+
+
+@pytest.mark.parametrize("first, second", [
+    ("\\(1\\times\\frac{x}{2}\\)", "\\(1\\times\\frac x2\\)"),
+    ("\\(\\log\\frac{\\sqrt{y}}{x}\\)", "\\(\\log\\frac{\\sqrt y}{x}\\)"),
+    ("C.S. \\(\\{-15\\}\\)", "\\(C.S=\\{-15\\}\\)"),
+    ("C.S. \\(=5\\)", "\\(C.S=5\\)"),
+    ("convergent; sum = \\(2\\)", "convergent; \\(\\sum\\frac{1}{1-\\frac12}=2\\)"),
+    ("divergent; sum = \\(-\\frac3{11}\\)", "divergent; Sum \\(=\\frac{a}{1-r}=\\frac{3}{1-12}=-\\frac{3}{11}\\)"),
+    ("series is convergent in \\((-\\frac12;+\\infty)\\)",
+     "\\((-\\infty;-1)\\cup(-\\frac12;+\\infty)\\cap(-1;+\\infty)=(-\\frac12;+\\infty)\\); "
+     "series is convergent in \\((-\\frac12;+\\infty)\\)"),
+])
+def test_two_spellings_of_the_same_answer_are_one_reading(first, second):
+    """Real readings (gpt-6.1-sol): both copied the page faithfully but wrote \\frac x2 /
+    \\frac{x}{2}, "C.S." with or without "=", or kept the work line in front of the
+    result - and every such problem was marked "unclear" for the tutor to check."""
+    [(_, note)] = grading.reconcile(transcription(("1", "", first, True, "clear")),
+                                    transcription(("1", "", second, True, "clear")))
+    assert note is None
+
+
+@pytest.mark.parametrize("first, second", [
+    ("C.S. \\(\\{4\\}\\)", "\\(C.S=\\{-4\\}\\)"),
+    ("\\(\\frac{1}{-300}\\)", "\\(\\frac{1}{300}\\)"),
+    ("\\(\\left(\\frac{9}{2}\\right)^5\\)", "\\(\\left(\\frac{9}{2}\\right)^9\\)"),
+    ("180-146=34", "180-136=34"),       # same result, but a step was read two ways
+    ("3x = 6", "x = 6"),
+])
+def test_a_different_value_is_still_a_disagreement(first, second):
+    [(_, note)] = grading.reconcile(transcription(("1", "", first, True, "clear")),
+                                    transcription(("1", "", second, True, "clear")))
+    assert note is not None
+
+
+@pytest.mark.parametrize("kind, student_expr", [("text", ""), ("choice", "B")])
+def test_a_different_option_letter_is_never_correct(fake_llm, page, kind, student_expr):
+    """Real case (gpt-4o): the student chose D, the grader's own work gave B, and the
+    verdict was "correct" with high confidence. The exact check compares the grader's
+    restatement of the answers, so it stayed silent when the grader called the question
+    "text" or copied the student's choice as B."""
+    fake_llm.reply("homework_transcription",
+                   transcription(("6", "Σ 6(-1/4)^n: A) diverges B) -6/5 C) 6/5 D) none", "D", True, "clear")))
+    fake_llm.reply("homework_grading", graded(("6", kind, "", "B", student_expr, "B", "correct")))
+
+    result = grading.grade_submission(page, "S", None, task_file_paths=page)
+
+    assert result["problems"][0]["verdict"] == "incorrect"
+    assert any(flag.startswith("6:") and "D" in flag and "B" in flag for flag in result["flags_for_tutor"])
+
+
+def test_the_same_option_in_another_case_stays_correct(fake_llm, page):
+    fake_llm.reply("homework_transcription", transcription(("9", "a) 0,25 b) 0,045 c) 0,35", "c", True, "clear")))
+    fake_llm.reply("homework_grading", graded(("9", "choice", "", "C", "c", "c) 0,35", "correct")))
+
+    assert grading.grade_submission(page, "S", None, task_file_paths=page)["problems"][0]["verdict"] == "correct"
+
+
+def test_an_answer_from_values_the_sheet_gives_stays_correct(fake_llm, page):
+    """Real case: "Sabendo que log2 a = 5, determina log2(√2·a)". The student's 11/2 was
+    right and so was the AI's key, but the exact check didn't know a = 32: it replaced
+    the key with a formula in a and marked the student incorrect."""
+    fake_llm.reply("homework_transcription", transcription(("1.1", "log2(√2 a)", "\\(\\frac{11}{2}\\)", True, "clear")))
+    fake_llm.reply("homework_grading", graded(
+        ("1.1", "number", "ln(2^(1/2)*a)/ln(2)", "11/2", "11/2", "11/2", "correct")))
+
+    result = grading.grade_submission(page, "S", None, task_file_paths=page)
+
+    problem = result["problems"][0]
+    assert (problem["verdict"], problem["correct_answer"]) == ("correct", "11/2")
+    assert not any("answer key was wrong" in flag for flag in result["flags_for_tutor"])
 
 
 def test_each_file_is_decoded_once_per_grading(fake_llm, page, tmp_path, monkeypatch):
