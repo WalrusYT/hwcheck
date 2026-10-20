@@ -12,6 +12,7 @@ load_dotenv()
 
 import auth
 import db
+import demo
 import notifications
 from admin_routes import admin_bp
 from config import ASSIGNMENT_FILES_DIR, IS_PRODUCTION, SUBMISSION_FILES_DIR, UPLOAD_DIR
@@ -100,6 +101,9 @@ def inject_notifications():
     if session.get("student_id"):
         ctx["student_notifications"] = notifications.get_student_notifications(session["student_id"], limit=8)
         ctx["student_unread_count"] = notifications.count_unread_student(session["student_id"])
+    elif demo.is_guest():
+        ctx["student_notifications"], ctx["student_unread_count"] = demo.notifications(limit=8)
+        ctx["demo_book_url"] = demo.BOOK_URL
     return ctx
 
 

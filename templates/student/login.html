@@ -25,6 +25,11 @@
       </label>
       <button type="submit" class="button-lg">{{ t('login.submit') }}</button>
     </form>
+    <div class="guest-entry">
+      <span class="guest-or">{{ t('login.or') }}</span>
+      <a class="button button-secondary button-lg" href="{{ url_for('student.guest_login') }}">{{ t('login.guest') }}</a>
+      <p class="muted">{{ t('login.guest_hint') }}</p>
+    </div>
   </div>
 </div>
 {% endblock %}

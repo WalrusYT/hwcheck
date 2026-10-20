@@ -122,13 +122,18 @@ MIGRATIONS = [
 ]
 
 
-def init_db():
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    conn = get_db()
+def create_schema(conn):
+    """Tables plus every migration - for the real database and the guest demo's."""
     conn.executescript(SCHEMA)
     for table, column, ddl in MIGRATIONS:
-        existing = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
+        existing = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
         if column not in existing:
             conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}")
     conn.commit()
+
+
+def init_db():
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    conn = get_db()
+    create_schema(conn)
     conn.close()

@@ -19,10 +19,12 @@ from flask import (
 from werkzeug.utils import secure_filename
 
 import db
+import demo
 import grading_jobs
 import homework_chat
 import notifications
 import performance
+import translations
 from auth import (
     check_password,
     clear_failed_logins,
@@ -38,6 +40,38 @@ from translations import t
 
 student_bp = Blueprint("student", __name__, url_prefix="/me")
 
+# What a guest may POST: switching the language, logging in for real, and asking
+# the hint helper (answered with demo.py's examples, nothing stored).
+_GUEST_POSTS = {"student.set_language", "student.login", "student.homework_chat_endpoint"}
+
+
+@student_bp.before_request
+def keep_guests_read_only():
+    if demo.is_guest() and request.method == "POST" and request.endpoint not in _GUEST_POSTS:
+        flash(t("demo.read_only"))
+        return redirect(request.referrer or url_for("student.dashboard"))
+    return None
+
+
+def _viewer():
+    """(database, student id) for whoever is looking. A guest gets the demo
+    database and its made-up student - never the real database."""
+    if demo.is_guest():
+        return demo.get_db(), demo.student_id()
+    return db.get_db(), session["student_id"]
+
+
+@student_bp.route("/demo")
+def guest_login():
+    """Look around the student area as a guest - from the login page or a link on
+    tutorilya.com (?lang=ru). A logged-in student stays logged in as themselves."""
+    if session.get("student_id"):
+        return redirect(url_for("student.dashboard"))
+    session["guest"] = True
+    if request.args.get("lang") in ("en", "ru"):
+        session["lang"] = request.args["lang"]
+    return redirect(url_for("student.dashboard"))
+
 
 @student_bp.route("/login", methods=["GET", "POST"])
 def login():
@@ -51,6 +85,7 @@ def login():
         student = conn.execute("SELECT * FROM students WHERE username = ?", (username,)).fetchone()
         if student and check_password(student["password_hash"], password):
             clear_failed_logins("student")
+            session.pop("guest", None)
             session["student_id"] = student["id"]
             session["lang"] = student["language"]
             if not student["first_login_at"]:
@@ -74,6 +109,7 @@ def login():
 @student_bp.route("/logout")
 def logout():
     session.pop("student_id", None)
+    session.pop("guest", None)
     return redirect(url_for("student.login"))
 
 
@@ -128,9 +164,9 @@ def _homework_items(conn, student_id):
 @student_bp.route("/")
 @student_required
 def dashboard():
-    conn = db.get_db()
-    student = conn.execute("SELECT * FROM students WHERE id = ?", (session["student_id"],)).fetchone()
-    items = _homework_items(conn, session["student_id"])
+    conn, student_id = _viewer()
+    student = conn.execute("SELECT * FROM students WHERE id = ?", (student_id,)).fetchone()
+    items = _homework_items(conn, student_id)
     conn.close()
     columns = {status: [i for i in items if i["status"] == status]
                for status in ("not_submitted", "awaiting", "reviewed")}
@@ -144,8 +180,8 @@ def dashboard():
 @student_bp.route("/homeworks")
 @student_required
 def homeworks():
-    conn = db.get_db()
-    items = _homework_items(conn, session["student_id"])
+    conn, student_id = _viewer()
+    items = _homework_items(conn, student_id)
     conn.close()
     return render_template("student/homeworks.html", items=items)
 
@@ -153,10 +189,10 @@ def homeworks():
 @student_bp.route("/homeworks/<int:assignment_id>", methods=["GET", "POST"])
 @student_required
 def homework_detail(assignment_id):
-    conn = db.get_db()
+    conn, student_id = _viewer()
     assignment = conn.execute(
         "SELECT * FROM homework_assignments WHERE id = ? AND student_id = ?",
-        (assignment_id, session["student_id"]),
+        (assignment_id, student_id),
     ).fetchone()
     if not assignment:
         conn.close()
@@ -164,7 +200,7 @@ def homework_detail(assignment_id):
 
     existing = conn.execute(
         "SELECT * FROM student_submissions WHERE assignment_id = ? AND student_id = ?",
-        (assignment_id, session["student_id"]),
+        (assignment_id, student_id),
     ).fetchone()
 
     errors = []
@@ -243,11 +279,11 @@ def homework_detail(assignment_id):
 
     submission = conn.execute(
         "SELECT * FROM student_submissions WHERE assignment_id = ? AND student_id = ?",
-        (assignment_id, session["student_id"]),
+        (assignment_id, student_id),
     ).fetchone()
     chat_rows = conn.execute(
         "SELECT role, content FROM hint_chat_messages WHERE assignment_id = ? AND student_id = ? ORDER BY id ASC",
-        (assignment_id, session["student_id"]),
+        (assignment_id, student_id),
     ).fetchall()
     conn.close()
 
@@ -297,6 +333,16 @@ def remove_submission(assignment_id):
 @student_bp.route("/homeworks/<int:assignment_id>/chat", methods=["POST"])
 @student_required
 def homework_chat_endpoint(assignment_id):
+    if demo.is_guest():
+        data = request.get_json(silent=True) or {}
+        try:
+            return jsonify(demo.hint_reply(assignment_id, data.get("action"), data.get("task_number"),
+                                           translations.current_lang()))
+        except LookupError:
+            abort(404)
+        except ValueError:
+            return jsonify({"error": "Invalid request"}), 400
+
     conn = db.get_db()
     assignment = conn.execute(
         "SELECT * FROM homework_assignments WHERE id = ? AND student_id = ?",
@@ -366,15 +412,15 @@ def homework_chat_endpoint(assignment_id):
 @student_bp.route("/performance")
 @student_required
 def performance_view():
-    conn = db.get_db()
-    student = conn.execute("SELECT * FROM students WHERE id = ?", (session["student_id"],)).fetchone()
+    conn, student_id = _viewer()
+    student = conn.execute("SELECT * FROM students WHERE id = ?", (student_id,)).fetchone()
     history = conn.execute(
         """SELECT ss.*, ha.title AS assignment_title
            FROM student_submissions ss
            JOIN homework_assignments ha ON ha.id = ss.assignment_id
            WHERE ss.student_id = ? AND ss.feedback_published = 1
            ORDER BY ss.reviewed_at DESC""",
-        (session["student_id"],),
+        (student_id,),
     ).fetchall()
     conn.close()
     grades = [r["tutor_grade"] for r in history]
@@ -385,6 +431,8 @@ def performance_view():
 @student_bp.route("/change-password", methods=["GET", "POST"])
 @student_required
 def change_password():
+    if demo.is_guest():
+        return redirect(url_for("student.dashboard"))
     error = None
     success = False
     if request.method == "POST":
@@ -414,12 +462,12 @@ def change_password():
 @student_bp.route("/notifications/<int:notification_id>/open")
 @student_required
 def notification_open(notification_id):
-    conn = db.get_db()
+    conn, student_id = _viewer()
     notif = conn.execute(
         "SELECT * FROM notifications WHERE id = ? AND recipient_type = 'student' AND recipient_id = ?",
-        (notification_id, session["student_id"]),
+        (notification_id, student_id),
     ).fetchone()
-    if notif:
+    if notif and not demo.is_guest():
         conn.execute("UPDATE notifications SET is_read = 1 WHERE id = ?", (notification_id,))
         conn.commit()
     conn.close()
@@ -438,20 +486,23 @@ def notifications_mark_all_read():
 @student_bp.route("/homeworks/<int:assignment_id>/task-files/<path:filename>")
 @student_required
 def task_file(assignment_id, filename):
-    conn = db.get_db()
+    conn, student_id = _viewer()
     assignment = conn.execute(
         "SELECT id, task_files FROM homework_assignments WHERE id = ? AND student_id = ?",
-        (assignment_id, session["student_id"]),
+        (assignment_id, student_id),
     ).fetchone()
     conn.close()
     if not assignment or filename not in json.loads(assignment["task_files"] or "[]"):
         abort(404)
-    return send_from_directory(ASSIGNMENT_FILES_DIR / str(assignment_id), filename)
+    base = demo.SHEETS_DIR if demo.is_guest() else ASSIGNMENT_FILES_DIR
+    return send_from_directory(base / str(assignment_id), filename)
 
 
 @student_bp.route("/submissions/<int:submission_id>/files/<path:filename>")
 @student_required
 def submission_file(submission_id, filename):
+    if demo.is_guest():
+        abort(404)  # the demo shows no student photos
     conn = db.get_db()
     submission = conn.execute(
         "SELECT id, files FROM student_submissions WHERE id = ? AND student_id = ?",

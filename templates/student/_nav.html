@@ -21,11 +21,26 @@
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg>
         </button>
         <div class="menu-dropdown" id="student-account-menu" hidden>
+          {% if session.get('guest') %}
+          <a class="menu-item" href="{{ url_for('student.logout') }}">{{ t('demo.exit') }}</a>
+          {% else %}
           <a class="menu-item" href="{{ url_for('student.change_password') }}">{{ t('nav.change_password') }}</a>
           <a class="menu-item" href="{{ url_for('student.logout') }}">{{ t('nav.logout') }}</a>
+          {% endif %}
         </div>
       </div>
     </div>
   </div>
   <script>initNotifDropdown('student-account-btn', 'student-account-menu');</script>
 </header>
+{% if session.get('guest') and demo_book_url %}
+<div class="demo-banner" role="note">
+  <div class="demo-banner-inner">
+    <p>{{ t('demo.banner') }}</p>
+    <div class="demo-banner-actions">
+      <a class="button button-amber" href="{{ demo_book_url }}" target="_blank" rel="noopener">{{ t('demo.book') }}</a>
+      <a class="button button-secondary" href="{{ url_for('student.logout') }}">{{ t('demo.exit') }}</a>
+    </div>
+  </div>
+</div>
+{% endif %}

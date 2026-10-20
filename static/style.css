@@ -607,6 +607,21 @@ input::placeholder, textarea::placeholder { color: #7A859B; }
 .auth .lang-switch { align-self: center; }
 .auth h1 { font-size: 1.9rem; text-align: center; }
 .auth button[type="submit"] { width: 100%; }
+.guest-entry { display: flex; flex-direction: column; align-items: stretch; gap: 10px; text-align: center; }
+.guest-entry .button { width: 100%; justify-content: center; }
+.guest-entry p { margin: 0; font-size: 0.92rem; }
+.guest-or { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 0.9rem; }
+.guest-or::before, .guest-or::after { content: ""; flex: 1; border-top: 1px solid var(--line); }
+
+/* ---- Guest demo ------------------------------------------------------------------------------------ */
+
+.demo-banner { background: var(--amber-soft); border-bottom: 1px solid var(--amber-line); }
+.demo-banner-inner {
+  max-width: 1240px; margin: 0 auto; padding: 10px 24px;
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 20px;
+}
+.demo-banner p { margin: 0; color: var(--amber-ink); font-weight: 700; }
+.demo-banner-actions { display: flex; flex-wrap: wrap; gap: 10px; }
 
 /* ---- Small screens --------------------------------------------------------------------------------- */
 

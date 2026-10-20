@@ -58,9 +58,12 @@ def admin_required(view):
 
 
 def student_required(view):
+    """A logged-in student, or a guest looking at the demo (see demo.py) - a guest has
+    no student_id, so a route that reads session["student_id"] fails for them instead
+    of showing a real student's data."""
     @wraps(view)
     def wrapped(*args, **kwargs):
-        if not session.get("student_id"):
+        if not session.get("student_id") and session.get("guest") is not True:
             return redirect(url_for("student.login", next=request.path))
         return view(*args, **kwargs)
     return wrapped

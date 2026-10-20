@@ -64,6 +64,7 @@ Production facts:
 | `homework_chat.py` | hint-only helper (2 buttons, 3 coins per assignment) |
 | `performance.py` / `performance_pdf.py` | averages, AI narrative, parent PDF (PyMuPDF) |
 | `translations.py` | EN/RU strings, `t()` |
+| `demo.py` | guest demo (`/me/demo`): made-up student in its own SQLite files, rebuilt per start, read-only |
 | `image_utils.py` | page loading, PDF rasterising, strips, data URLs |
 
 Tables: `students`, `homework_assignments`, `student_submissions`,
@@ -152,6 +153,10 @@ tell the student their number is wrong.
 - Redirects after login go through `safe_next_url`. Logins are rate limited per IP.
 - Every student route checks ownership (`student_id`) of the assignment,
   submission, file, chat, and notification it touches - test the IDOR case.
+- Guests (the demo, `session["guest"]`) have no `student_id`: a student route
+  reads data only through `_viewer()`, which hands a guest the demo database.
+  Guest POSTs are refused in `keep_guests_read_only` unless listed in
+  `_GUEST_POSTS`; guests never write, never trigger AI calls or notifications.
 - File routes serve only filenames listed on the owning DB row; stored names
   are `secure_filename` + index prefix, never a user-controlled path.
 - Student uploads, task sheets, and `task_number` are untrusted content, never

@@ -128,6 +128,15 @@ STRINGS = {
         "change_password.weak": "Please choose a stronger password (at least 8 characters, not a common one).",
         "notif.graded": '"{title}" has been graded: {grade}',
         "notif.new_assignment": 'New homework assigned: "{title}"',
+        "login.or": "or",
+        "login.guest": "Look around as a guest",
+        "login.guest_hint": "A demo student account with example homework - see what my students get. "
+                            "Nothing you do there is saved.",
+        "demo.banner": "This is a demo account: it's what my students see. Everything here is an example.",
+        "demo.book": "Book a lesson",
+        "demo.exit": "Exit the demo",
+        "demo.read_only": "This is a demo - you can look around, but nothing changes here. "
+                          "For my students it all works for real.",
     },
     "ru": {
         "site_name": "TutorIlya Homework",
@@ -254,6 +263,15 @@ STRINGS = {
         "change_password.weak": "Пожалуйста, выберите более надёжный пароль (минимум 8 символов, не слишком простой).",
         "notif.graded": "«{title}» проверено. Оценка: {grade}",
         "notif.new_assignment": "Новое домашнее задание: «{title}»",
+        "login.or": "или",
+        "login.guest": "Посмотреть как гость",
+        "login.guest_hint": "Демо-кабинет ученика с примерами домашек — посмотри, что получают мои ученики. "
+                            "Ничего из того, что ты там сделаешь, не сохраняется.",
+        "demo.banner": "Это демо-кабинет: так его видят мои ученики. Всё здесь — пример.",
+        "demo.book": "Записаться на урок",
+        "demo.exit": "Выйти из демо",
+        "demo.read_only": "Это демо — здесь можно всё посмотреть, но ничего не меняется. "
+                          "У моих учеников всё работает по-настоящему.",
     },
 }
 
