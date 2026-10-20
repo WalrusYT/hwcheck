@@ -7,7 +7,9 @@ can, and hands the draft to the tutor, who reviews, edits and publishes.
 
 Live at **[homework.tutorilya.com](https://homework.tutorilya.com)** and used by
 real students (school maths on the Portuguese and Russian curricula, and
-university calculus / analysis).
+university calculus / analysis). **Try the student area as a guest:
+[homework.tutorilya.com/me/demo](https://homework.tutorilya.com/me/demo)** - a
+read-only demo with made-up data, kept in a separate database from the real one.
 
 > Nothing the AI writes reaches a student until the tutor publishes it. The
 > design goal is not "an AI that grades" but a draft the tutor can trust:
