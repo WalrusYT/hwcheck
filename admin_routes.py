@@ -301,34 +301,9 @@ def create_assignment(student_id):
     conn.commit()
 
     if task_files:
-        assignment_dir = ASSIGNMENT_FILES_DIR / str(assignment_id)
-        assignment_dir.mkdir(parents=True, exist_ok=True)
-        saved_names = []
-        for i, f in enumerate(task_files):
-            safe = secure_filename(f.filename) or f"file_{i}"
-            dest = assignment_dir / f"{i:02d}_{safe}"
-            f.save(dest)
-            saved_names.append(dest.name)
-        conn.execute(
-            "UPDATE homework_assignments SET task_files = ? WHERE id = ?",
-            (json.dumps(saved_names), assignment_id),
-        )
-        conn.commit()
-
+        _save_assignment_files(conn, assignment_id, "task_files", ASSIGNMENT_FILES_DIR, task_files)
     if solution_files:
-        solution_dir = SOLUTION_FILES_DIR / str(assignment_id)
-        solution_dir.mkdir(parents=True, exist_ok=True)
-        saved_names = []
-        for i, f in enumerate(solution_files):
-            safe = secure_filename(f.filename) or f"file_{i}"
-            dest = solution_dir / f"{i:02d}_{safe}"
-            f.save(dest)
-            saved_names.append(dest.name)
-        conn.execute(
-            "UPDATE homework_assignments SET solution_files = ? WHERE id = ?",
-            (json.dumps(saved_names), assignment_id),
-        )
-        conn.commit()
+        _save_assignment_files(conn, assignment_id, "solution_files", SOLUTION_FILES_DIR, solution_files)
 
     conn.close()
     notifications.notify_student(
@@ -362,6 +337,59 @@ def _delete_assignment_cascade(conn, assignment_id):
         shutil.rmtree(SUBMISSION_FILES_DIR / str(submission_id), ignore_errors=True)
     shutil.rmtree(ASSIGNMENT_FILES_DIR / str(assignment_id), ignore_errors=True)
     shutil.rmtree(SOLUTION_FILES_DIR / str(assignment_id), ignore_errors=True)
+
+
+_ASSIGNMENT_FILE_COLUMNS = {"task_files", "solution_files"}
+
+
+def _save_assignment_files(conn, assignment_id, column, base_dir, uploads):
+    """Store an assignment's sheet or answer-key files, replacing the previous set: the
+    row lists the new names first, then files no longer listed are removed."""
+    assert column in _ASSIGNMENT_FILE_COLUMNS  # interpolated into the SQL below
+    directory = base_dir / str(assignment_id)
+    directory.mkdir(parents=True, exist_ok=True)
+    old_names = json.loads(conn.execute(
+        f"SELECT {column} FROM homework_assignments WHERE id = ?", (assignment_id,)).fetchone()[0] or "[]")
+    saved_names = []
+    for i, f in enumerate(uploads):
+        dest = directory / f"{i:02d}_{secure_filename(f.filename) or f'file_{i}'}"
+        f.save(dest)
+        saved_names.append(dest.name)
+    conn.execute(f"UPDATE homework_assignments SET {column} = ? WHERE id = ?", (json.dumps(saved_names), assignment_id))
+    conn.commit()
+    for name in set(old_names) - set(saved_names):
+        (directory / name).unlink(missing_ok=True)
+
+
+@admin_bp.route("/assignments/<int:assignment_id>/files", methods=["POST"])
+@admin_required
+def replace_assignment_files(assignment_id):
+    """Attach or replace the sheet / answer key of an existing assignment - e.g. the key
+    the tutor didn't have yet when creating it. "Recheck with AI" then grades with it."""
+    conn = db.get_db()
+    assignment = conn.execute(
+        "SELECT student_id FROM homework_assignments WHERE id = ?", (assignment_id,)
+    ).fetchone()
+    if not assignment:
+        conn.close()
+        abort(404)
+    back = safe_next_url(request.form.get("next"),
+                         url_for("admin.student_detail", student_id=assignment["student_id"]))
+    task_files = [f for f in request.files.getlist("task_files") if f and f.filename]
+    solution_files = [f for f in request.files.getlist("solution_files") if f and f.filename]
+    bad = [f.filename for f in task_files + solution_files if Path(f.filename).suffix.lower() not in ALLOWED_EXT]
+    if bad or not (task_files or solution_files):
+        conn.close()
+        flash(f"Unsupported file type: {', '.join(bad)}." if bad else "Choose a file to upload.")
+        return redirect(back)
+
+    if task_files:
+        _save_assignment_files(conn, assignment_id, "task_files", ASSIGNMENT_FILES_DIR, task_files)
+    if solution_files:
+        _save_assignment_files(conn, assignment_id, "solution_files", SOLUTION_FILES_DIR, solution_files)
+    conn.close()
+    flash("Files saved. Press “Recheck with AI” to grade with them.")
+    return redirect(back)
 
 
 @admin_bp.route("/assignments/<int:assignment_id>/delete", methods=["POST"])
@@ -527,6 +555,7 @@ def submission_detail(submission_id):
 
     files = json.loads(submission["files"] or "[]")
     task_files = json.loads(assignment["task_files"] or "[]") if assignment else []
+    solution_files = json.loads(assignment["solution_files"] or "[]") if assignment else []
     ai_result = json.loads(submission["ai_result"]) if submission["ai_result"] else None
     tutor_result = json.loads(submission["tutor_result"]) if submission["tutor_result"] else None
     problems = tutor_result if tutor_result is not None else (ai_result["problems"] if ai_result else [])
@@ -539,6 +568,7 @@ def submission_detail(submission_id):
         student=student,
         files=files,
         task_files=task_files,
+        solution_files=solution_files,
         ai_result=ai_result,
         problems=problems,
         show_form=show_form,

@@ -20,7 +20,7 @@
   <a class="button button-secondary" href="{{ url_for('admin.student_detail', student_id=student['id']) }}">Student profile</a>
 </div>
 
-{% if task_files %}
+{% if task_files or solution_files %}
 <div class="file-tiles">
   {% for f in task_files %}
   <a class="file-tile" href="{{ url_for('admin.assignment_file', assignment_id=assignment['id'], filename=f) }}" target="_blank" rel="noopener">
@@ -28,10 +28,36 @@
     <span>Sheet · {{ f }}</span>
   </a>
   {% endfor %}
+  {% for f in solution_files %}
+  <a class="file-tile" href="{{ url_for('admin.assignment_solution_file', assignment_id=assignment['id'], filename=f) }}" target="_blank" rel="noopener">
+    <span class="ficon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="7.5" cy="15.5" r="5.5"></circle><path d="m21 2-9.6 9.6"></path><path d="m15.5 7.5 3 3L22 7l-3-3"></path></svg></span>
+    <span>Answer key · {{ f }}</span>
+  </a>
+  {% endfor %}
 </div>
-{% else %}
+{% endif %}
+{% if not task_files %}
 <div class="flags">This assignment has no homework sheet attached, so the AI had to guess which problems exist
   and what they ask. Check its problem list against the photos carefully.</div>
+{% endif %}
+{% if assignment %}
+<details class="spoiler" style="margin-top: 12px">
+  <summary>{% if solution_files %}Replace the sheet or answer key{% else %}No answer key: the AI solves every problem itself. Attach one{% endif %}</summary>
+  <form method="post" action="{{ url_for('admin.replace_assignment_files', assignment_id=assignment['id']) }}"
+        enctype="multipart/form-data" class="form card spoiler-content">{{ csrf_field() }}
+    <input type="hidden" name="next" value="{{ url_for('admin.submission_detail', submission_id=submission['id']) }}">
+    <label>
+      Homework sheet <span class="muted">(replaces the current one)</span>
+      <input type="file" name="task_files" accept="image/*,.heic,.heif,.pdf" multiple>
+    </label>
+    <label>
+      Solutions / answer key <span class="muted">(replaces the current one - only the AI sees it, never the student)</span>
+      <input type="file" name="solution_files" accept="image/*,.heic,.heif,.pdf" multiple>
+    </label>
+    <p class="muted" style="margin: 0">Then press “Recheck with AI” below to grade with the new files.</p>
+    <button type="submit" class="button-secondary">Upload</button>
+  </form>
+</details>
 {% endif %}
 
 {% if ai_pending %}
