@@ -306,6 +306,9 @@ def create_assignment(student_id):
         _save_assignment_files(conn, assignment_id, "solution_files", SOLUTION_FILES_DIR, solution_files)
 
     conn.close()
+    # Earlier homework left without photos for a week now counts as not handed in -
+    # setting the next one is when the student's summary catches up with that.
+    performance.refresh_narrative_in_background(student_id)
     notifications.notify_student(
         student_id,
         "new_assignment",
@@ -420,19 +423,12 @@ def student_performance(student_id):
     if not student:
         conn.close()
         abort(404)
-    history = conn.execute(
-        """SELECT ss.*, ha.title AS assignment_title
-           FROM student_submissions ss
-           JOIN homework_assignments ha ON ha.id = ss.assignment_id
-           WHERE ss.student_id = ? AND ss.feedback_published = 1
-           ORDER BY ss.reviewed_at DESC""",
-        (student_id,),
-    ).fetchall()
+    record = performance.homework_record(conn, student_id)
     conn.close()
-    grades = [r["tutor_grade"] for r in history]
-    letter, gpa = performance.compute_average(grades)
     return render_template(
-        "admin/student_performance.html", student=student, history=history, letter=letter, gpa=gpa
+        "admin/student_performance.html", student=student, history=record["graded"], missed=record["missed"],
+        handed_in=record["handed_in"], due=record["due"], letter=record["letter"], gpa=record["gpa"],
+        missed_after_days=performance.MISSED_AFTER_DAYS,
     )
 
 
@@ -440,30 +436,28 @@ def student_performance(student_id):
 @admin_required
 def student_performance_pdf(student_id):
     conn = db.get_db()
-    student = conn.execute("SELECT * FROM students WHERE id = ?", (student_id,)).fetchone()
-    if not student:
-        conn.close()
+    exists = conn.execute("SELECT 1 FROM students WHERE id = ?", (student_id,)).fetchone()
+    conn.close()
+    if not exists:
         abort(404)
-    history = conn.execute(
-        """SELECT ss.*, ha.title AS assignment_title
-           FROM student_submissions ss
-           JOIN homework_assignments ha ON ha.id = ss.assignment_id
-           WHERE ss.student_id = ? AND ss.feedback_published = 1
-           ORDER BY ss.reviewed_at DESC""",
-        (student_id,),
-    ).fetchall()
+    # Homework becomes "not handed in" a week after it's set, with no event of its own:
+    # bring the summary up to date before it goes to parents (on failure the old one stays).
+    performance.refresh_narrative(student_id)
+    conn = db.get_db()
+    student = conn.execute("SELECT * FROM students WHERE id = ?", (student_id,)).fetchone()
+    record = performance.homework_record(conn, student_id)
     conn.close()
 
-    grades = [r["tutor_grade"] for r in history]
-    letter, gpa = performance.compute_average(grades)
     history_data = [
         {"title": r["assignment_title"], "submitted_at": r["reviewed_at"] or r["submitted_at"], "grade": r["tutor_grade"]}
-        for r in history
+        for r in record["graded"]
     ]
+    missed_data = [{"title": m["title"], "set_at": m["created_at"]} for m in record["missed"]]
     import performance_pdf  # PyMuPDF: loaded on first report, not at app start (512 MB instance)
 
     pdf_bytes = performance_pdf.build_performance_pdf(
-        student["name"], letter, gpa, history_data, student["performance_narrative"]
+        student["name"], record["letter"], record["gpa"], history_data, student["performance_narrative"],
+        missed=missed_data, handed_in=record["handed_in"], due=record["due"],
     )
     filename = f"{secure_filename(student['name'])}_performance.pdf"
     return Response(

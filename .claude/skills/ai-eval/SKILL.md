@@ -152,6 +152,10 @@ truncated to 20 chars.
 ## 3. Performance narrative
 
 - every grade it mentions exists in the student's published history;
+- it names homework not handed in when there is some, and never when all was
+  handed in; with nothing graded it names no strength (gpt-4o invented
+  "curiosity" and "determination" until the prompt forbade it); homework titles
+  stay as given - Portuguese ones in Latin letters, not "Потенции";
 - written in the student's saved language;
 - regenerated after a published grade changes; on failure the old one stays.
 

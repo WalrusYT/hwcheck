@@ -613,6 +613,9 @@ input::placeholder, textarea::placeholder { color: #7A859B; }
 .guest-or { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 0.9rem; }
 .guest-or::before, .guest-or::after { content: ""; flex: 1; border-top: 1px solid var(--line); }
 
+.handed-in { margin: 0; font-weight: 800; color: var(--good-ink); }
+.handed-in.has-missed { color: var(--bad-ink); }
+
 /* ---- Guest demo ------------------------------------------------------------------------------------ */
 
 .demo-banner { background: var(--amber-soft); border-bottom: 1px solid var(--amber-line); }

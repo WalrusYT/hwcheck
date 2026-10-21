@@ -15,6 +15,9 @@
     {% else %}
       <p class="muted" style="margin: 0">{{ t('performance.no_grades') }}</p>
     {% endif %}
+    {% if due %}
+      <p class="handed-in {{ 'has-missed' if missed }}">{{ t('performance.handed_in', n=handed_in, total=due) }}</p>
+    {% endif %}
   </section>
   <section class="card grow {{ 'card-amber' if student['performance_narrative'] }}">
     {% if student['performance_narrative'] %}
@@ -48,4 +51,23 @@
   </div>
   {% endif %}
 </section>
+
+{% if missed %}
+<section class="section" aria-labelledby="missed-title">
+  <h2 id="missed-title">{{ t('performance.missed_title') }}</h2>
+  <div class="board">
+    {% for m in missed %}
+    <article class="hw-card">
+      <div class="topline">
+        <div>
+          <h3>{{ m['title'] }}</h3>
+          <p class="muted">{{ t('performance.set_on', date=m['created_at'][:10]) }}</p>
+        </div>
+        <span class="badge badge-incorrect">{{ t('performance.not_handed_in') }}</span>
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
 {% endblock %}

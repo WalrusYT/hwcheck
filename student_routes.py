@@ -414,18 +414,11 @@ def homework_chat_endpoint(assignment_id):
 def performance_view():
     conn, student_id = _viewer()
     student = conn.execute("SELECT * FROM students WHERE id = ?", (student_id,)).fetchone()
-    history = conn.execute(
-        """SELECT ss.*, ha.title AS assignment_title
-           FROM student_submissions ss
-           JOIN homework_assignments ha ON ha.id = ss.assignment_id
-           WHERE ss.student_id = ? AND ss.feedback_published = 1
-           ORDER BY ss.reviewed_at DESC""",
-        (student_id,),
-    ).fetchall()
+    record = performance.homework_record(conn, student_id)
     conn.close()
-    grades = [r["tutor_grade"] for r in history]
-    letter, gpa = performance.compute_average(grades)
-    return render_template("student/performance.html", student=student, history=history, letter=letter, gpa=gpa)
+    return render_template("student/performance.html", student=student, history=record["graded"],
+                           missed=record["missed"], handed_in=record["handed_in"], due=record["due"],
+                           letter=record["letter"], gpa=record["gpa"])
 
 
 @student_bp.route("/change-password", methods=["GET", "POST"])

@@ -128,6 +128,10 @@ STRINGS = {
         "change_password.weak": "Please choose a stronger password (at least 8 characters, not a common one).",
         "notif.graded": '"{title}" has been graded: {grade}',
         "notif.new_assignment": 'New homework assigned: "{title}"',
+        "performance.handed_in": "Handed in {n} of {total}",
+        "performance.missed_title": "Homework not handed in",
+        "performance.not_handed_in": "Not handed in",
+        "performance.set_on": "Set {date}",
         "login.or": "or",
         "login.guest": "Look around as a guest",
         "login.guest_hint": "A demo student account with example homework - see what my students get. "
@@ -263,6 +267,10 @@ STRINGS = {
         "change_password.weak": "Пожалуйста, выберите более надёжный пароль (минимум 8 символов, не слишком простой).",
         "notif.graded": "«{title}» проверено. Оценка: {grade}",
         "notif.new_assignment": "Новое домашнее задание: «{title}»",
+        "performance.handed_in": "Сдано {n} из {total}",
+        "performance.missed_title": "Несданные домашние задания",
+        "performance.not_handed_in": "Не сдано",
+        "performance.set_on": "Выдано {date}",
         "login.or": "или",
         "login.guest": "Посмотреть как гость",
         "login.guest_hint": "Демо-кабинет ученика с примерами домашек — посмотри, что получают мои ученики. "

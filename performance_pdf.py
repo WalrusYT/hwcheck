@@ -25,9 +25,10 @@ def _new_page(doc):
     return page
 
 
-def build_performance_pdf(student_name, average_letter, average_gpa, history, narrative):
-    """history: list of {"title": str, "submitted_at": str, "grade": str}, most recent first.
-    Returns PDF bytes.
+def build_performance_pdf(student_name, average_letter, average_gpa, history, narrative,
+                          missed=(), handed_in=0, due=0):
+    """history: list of {"title": str, "submitted_at": str, "grade": str}, most recent first;
+    missed: list of {"title": str, "set_at": str} not handed in. Returns PDF bytes.
     """
     doc = fitz.open()
     page = _new_page(doc)
@@ -47,12 +48,21 @@ def build_performance_pdf(student_name, average_letter, average_gpa, history, na
     page.insert_text((MARGIN, y), "Average grade:", fontsize=12, fontname=FONT_BOLD)
     avg_text = f"{average_letter} ({average_gpa}/4.0)" if average_letter else "No graded homework yet"
     page.insert_text((MARGIN + 130, y), avg_text, fontsize=12, fontname=FONT_REGULAR)
-    y += 30
+    y += 20
+    if due:
+        page.insert_text((MARGIN, y), "Handed in:", fontsize=12, fontname=FONT_BOLD)
+        page.insert_text((MARGIN + 130, y), f"{handed_in} of {due} homework assignments set",
+                         fontsize=12, fontname=FONT_REGULAR)
+        y += 20
+    y += 10
 
     if narrative:
-        rect = fitz.Rect(MARGIN, y, PAGE_WIDTH - MARGIN, y + 90)
-        page.insert_textbox(rect, narrative, fontsize=10.5, fontname=FONT_REGULAR, lineheight=1.4)
-        y += 100
+        # insert_textbox writes nothing at all when the text doesn't fit: grow the box
+        for height in (90, 140, 200, 280):
+            rect = fitz.Rect(MARGIN, y, PAGE_WIDTH - MARGIN, y + height)
+            if page.insert_textbox(rect, narrative, fontsize=10.5, fontname=FONT_REGULAR, lineheight=1.4) >= 0:
+                break
+        y += height + 10
 
     y += 10
     page.insert_text((MARGIN, y), "Grade history", fontsize=13, fontname=FONT_BOLD)
@@ -87,6 +97,31 @@ def build_performance_pdf(student_name, average_letter, average_gpa, history, na
 
     if not history:
         page.insert_text((MARGIN, y), "No graded homework yet.", fontsize=10, fontname=FONT_REGULAR, color=(0.5, 0.5, 0.5))
+        y += 18
+
+    if missed:
+        if y > PAGE_HEIGHT - MARGIN - 80:
+            page = _new_page(doc)
+            y = MARGIN
+        y += 20
+        page.insert_text((MARGIN, y), "Not handed in", fontsize=13, fontname=FONT_BOLD)
+        y += 10
+        page.draw_line((MARGIN, y), (PAGE_WIDTH - MARGIN, y), color=(0.7, 0.7, 0.7))
+        y += 18
+        page.insert_text((col_title_x, y), "Homework", fontsize=9, fontname=FONT_REGULAR, color=(0.4, 0.4, 0.4))
+        page.insert_text((col_date_x, y), "Set on", fontsize=9, fontname=FONT_REGULAR, color=(0.4, 0.4, 0.4))
+        y += 14
+        page.draw_line((MARGIN, y), (PAGE_WIDTH - MARGIN, y), color=(0.85, 0.85, 0.85))
+        y += 14
+        for item in missed:
+            if y > PAGE_HEIGHT - MARGIN:
+                page = _new_page(doc)
+                y = MARGIN
+            title = item["title"] if len(item["title"]) <= 45 else item["title"][:42] + "..."
+            page.insert_text((col_title_x, y), title, fontsize=10, fontname=FONT_REGULAR)
+            page.insert_text((col_date_x, y), (item.get("set_at") or "")[:10], fontsize=10, fontname=FONT_REGULAR)
+            page.insert_text((col_grade_x, y), "—", fontsize=10, fontname=FONT_BOLD, color=(0.7, 0.1, 0.1))
+            y += 18
 
     doc.subset_fonts()  # the two full Noto Sans files were ~90% of the file size
     pdf_bytes = doc.tobytes(garbage=3, deflate=True)

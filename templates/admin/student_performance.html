@@ -18,6 +18,9 @@
     {% else %}
       <p class="muted" style="margin: 0">No graded homework yet.</p>
     {% endif %}
+    {% if due %}
+      <p class="handed-in {{ 'has-missed' if missed }}">Handed in {{ handed_in }} of {{ due }}</p>
+    {% endif %}
   </section>
   <section class="card grow {{ 'card-amber' if student['performance_narrative'] }}">
     {% if student['performance_narrative'] %}
@@ -47,4 +50,21 @@
   </div>
   {% endif %}
 </section>
+
+{% if missed %}
+<section class="section" aria-labelledby="missed-title">
+  <h2 id="missed-title">Not handed in</h2>
+  <p class="muted" style="margin: 0">No photos {{ missed_after_days }} days after the homework was set.</p>
+  <div class="board">
+    {% for m in missed %}
+    <article class="hw-card">
+      <div class="topline">
+        <div><h3>{{ m['title'] }}</h3><p class="muted">Set {{ m['created_at'][:10] }}</p></div>
+        <span class="badge badge-incorrect">Not handed in</span>
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
 {% endblock %}

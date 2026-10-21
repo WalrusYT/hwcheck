@@ -82,6 +82,11 @@ Tables: `students`, `homework_assignments`, `student_submissions`,
   tutor-corrected student answers back as `known_answers` so they are not re-read.
 - Grades A-F map to 4-0; averages use published feedback only. The narrative is
   secondary: if its regeneration fails the old one stays and grades still work.
+- Homework with no photos `MISSED_AFTER_DAYS` (7) after it was set counts as
+  not handed in (`performance.homework_record`): shown as "handed in X of Y"
+  plus a list on both performance pages and the parent PDF, and given to the
+  narrative - it never lowers the average. The narrative is refreshed when the
+  tutor sets new homework and before every parent PDF.
 - Notifications are created inside the state-changing request, never while
   rendering, and in the **recipient's** saved language (a past bug used the
   tutor's session language).
