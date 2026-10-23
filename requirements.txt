@@ -7,7 +7,7 @@ markupsafe==3.0.3
 python-dotenv==1.2.3
 openai==3.19.2
 pymupdf==1.28.2
-pillow==12.3.0
+pillow==13.0.0
 pillow-heif==1.8.0
 sympy==1.14.0
 gunicorn==26.2.0
