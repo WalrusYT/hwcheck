@@ -392,6 +392,19 @@ def test_the_same_option_in_another_case_stays_correct(fake_llm, page):
     assert grading.grade_submission(page, "S", None, task_file_paths=page)["problems"][0]["verdict"] == "correct"
 
 
+def test_a_length_from_pythagoras_stays_correct(fake_llm, page):
+    """Real case: the student's 10 for a hypotenuse was marked incorrect, the key replaced
+    with "-10, 10" - every Pythagoras problem on the sheet, with no explanation left."""
+    fake_llm.reply("homework_transcription", transcription(("A.1", "legs 6 and 8, hypotenuse y", "10=c", True, "clear")))
+    fake_llm.reply("homework_grading", graded(("A.1", "equation", "6^2+8^2=y^2", "10", "10=c", "10", "correct")))
+
+    result = grading.grade_submission(page, "S", None, task_file_paths=page)
+
+    problem = result["problems"][0]
+    assert (problem["verdict"], problem["correct_answer"]) == ("correct", "10")
+    assert not any("answer key was wrong" in flag for flag in result["flags_for_tutor"])
+
+
 def test_an_answer_from_values_the_sheet_gives_stays_correct(fake_llm, page):
     """Real case: "Sabendo que log2 a = 5, determina log2(√2·a)". The student's 11/2 was
     right and so was the AI's key, but the exact check didn't know a = 32: it replaced

@@ -91,6 +91,40 @@ def test_one_of_several_true_options_is_left_to_the_grader():
     assert math_check.check("choice", "", "B; C; D", "A").student_matches is False
 
 
+def test_a_key_that_names_only_the_roots_the_task_allows_is_not_wrong():
+    """Real case (Pythagoras): y^2 = 6^2 + 8^2 has the roots -10 and 10, but a length is
+    positive. The right key 10 was "corrected" to "-10, 10" and the student's 10 failed."""
+    result = math_check.check("equation", "6^2+8^2=y^2", "10", "10")
+    assert (result.student_matches, result.key_matches) == (True, None)
+    assert math_check.check("equation", "5^2+y^2=7^2", "2*sqrt(6)", "y=2*sqrt(6)").student_matches is True
+    assert math_check.check("equation", "6^2+8^2=y^2", "10", "14").student_matches is False
+    # all the roots against a key with some of them: only the grader knows which the task wants
+    assert math_check.check("equation", "x^2=4", "2", "-2, 2").student_matches is None
+    # a key that isn't among the roots is still wrong
+    wrong = math_check.check("equation", "x^2=4", "3", "2, -2")
+    assert (wrong.key_matches, wrong.student_matches) == (False, True)
+
+
+def test_an_answer_written_with_the_letter_on_the_right_is_read():
+    """"10=c" was read as the letter c, not as 10."""
+    assert math_check.check("equation", "6^2+8^2=c^2", "10", "10=c").student_matches is True
+    assert math_check.check("equation", "2^2+1^2=c^2", "sqrt(5)", "sqrt(5)=c").student_matches is True
+    assert math_check.check("equation", "2*x=6", "3", "x=3").student_matches is True
+
+
+def test_a_rounded_decimal_gives_no_opinion():
+    """Real case (trigonometry): 6*cos(30 degrees) = 5.196..., written as 5.2. Whether the
+    task accepts rounding is for the grader - the check must not fail it, or the key."""
+    result = math_check.check("number", "6*sqrt(3)/2", "5.2", "5.2")
+    assert (result.student_matches, result.key_matches) == (None, None)
+    assert math_check.check("number", "6*sqrt(3)/2", "5.2", "5.7").student_matches is False
+    assert math_check.check("number", "1/3", "1/3", "0.34").student_matches is False
+    # a rounded key for a length: not "wrong", and the same value as the student's
+    rounded = math_check.check("equation", "x^2=75", "8.66", "8.66")
+    assert (rounded.student_matches, rounded.key_matches) == (True, None)
+    assert math_check.check("equation", "2*x=sqrt(3)", "sqrt(3)/2", "0.87").student_matches is None
+
+
 def test_unparseable_input_gives_no_opinion():
     assert math_check.check("expression", "\\frac{x}{y}", "", "").student_matches is None
     assert math_check.check("proof", "", "", "").student_matches is None

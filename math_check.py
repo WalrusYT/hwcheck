@@ -7,6 +7,7 @@ parsed as plain math, the result here is exact and overrules it.
 import random
 import re
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import Optional
 
 import sympy
@@ -71,7 +72,21 @@ def equivalent(a, b) -> Optional[bool]:
         numeric = _equal_at_sample_points(a, b)
         if numeric is not None:
             return numeric
+        # 5.2 for 6*cos(30°) = 5.196...: whether the task accepts rounding isn't ours to say
+        if _rounds_to(a, b) or _rounds_to(b, a):
+            return None
     return bool(result) if result is not None else None
+
+
+def _rounds_to(written, exact):
+    """Is `written` a decimal that `exact` rounds to, at the places it shows?"""
+    if not written.is_Float or not exact.is_number:
+        return False
+    try:
+        places = max(0, -Decimal(repr(float(written))).as_tuple().exponent)
+        return abs(round(float(exact), places) - float(written)) < 1e-12
+    except (TypeError, ValueError):  # a complex value
+        return False
 
 
 def _equal_at_sample_points(a, b, tries=60, needed=6) -> Optional[bool]:
@@ -109,8 +124,10 @@ def _parse_solution_set(text):
     for part in _SPLIT_SOLUTIONS.split(text.strip()):
         if not part:
             continue
-        part = part.split("=")[-1]
-        value = parse(part)
+        sides = part.split("=")
+        if len(sides) > 1 and re.fullmatch(r"\s*[A-Za-z]\s*", sides[-1]):
+            sides.pop()  # "10=c": the value is on the left
+        value = parse(sides[-1])
         if value is None:
             return None
         values.append(value)
@@ -125,7 +142,7 @@ def _matches_solutions(text, solutions) -> Optional[bool]:
     results = [_same_solution_set(_parse_solution_set(reading), solutions) for reading in readings]
     if True in results:
         return True
-    return False if False in results else None
+    return None if None in results else False
 
 
 def _same_solution_set(a, b) -> Optional[bool]:
@@ -133,13 +150,27 @@ def _same_solution_set(a, b) -> Optional[bool]:
         return None
     if len(a) != len(b):
         return False
-    remaining = list(b)
+    remaining, unsure = list(b), False
     for value in a:
-        match = next((other for other in remaining if equivalent(value, other)), None)
-        if match is None:
-            return False
+        verdicts = [(other, equivalent(value, other)) for other in remaining]
+        match = next((other for other, same in verdicts if same), None)
+        if match is None:  # no exact match: a rounded value can still be this root
+            match = next((other for other, same in verdicts if same is None), None)
+            if match is None:
+                return False
+            unsure = True
         remaining.remove(match)
-    return True
+    return None if unsure else True
+
+
+def _names_some_of(text, solutions):
+    """Does the answer give some of the solutions, but not all of them?"""
+    for reading in {_DECIMAL_COMMA.sub(".", text or ""), text or ""}:
+        values = _parse_solution_set(reading)
+        if values and len(values) < len(solutions) and all(
+                any(equivalent(value, s) is not False for s in solutions) for value in values):
+            return True
+    return False
 
 
 def _solve_equation(problem_expr):
@@ -192,6 +223,14 @@ def check(kind, problem_expr, correct_expr, student_expr) -> Check:
         if solutions is None:
             key = _parse_solution_set(_DECIMAL_COMMA.sub(".", correct_expr or ""))
             return Check(student_matches=_matches_solutions(student_expr, key) if key else None)
+        if _names_some_of(correct_expr, solutions):
+            # y^2 = 100 for a length: the task rules out -10, which the equation can't know.
+            # So the key isn't wrong; a student who gives every root isn't either, for all
+            # we can tell, and that's the grader's call. Anyone else is compared with the key.
+            if _matches_solutions(student_expr, solutions) is True:
+                return Check()
+            key = _parse_solution_set(_DECIMAL_COMMA.sub(".", correct_expr))
+            return Check(student_matches=_matches_solutions(student_expr, key))
         reference = ", ".join(sympy.latex(s) for s in solutions) or "\\emptyset"
         return Check(student_matches=_matches_solutions(student_expr, solutions),
                      key_matches=_matches_solutions(correct_expr, solutions),
